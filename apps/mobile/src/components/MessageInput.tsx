@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import type { Theme } from '../theme/theme';
 import type { HybridMode } from '../types';
+import { Icon } from './common/Icon';
 
 interface MessageInputProps {
   theme: Theme;
@@ -67,7 +68,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             onPress={onAttachMedia}
             activeOpacity={0.7}
           >
-            <Text style={styles.attachIcon}>📎</Text>
+            <Icon name="paperclip" size={18} color={theme.textMuted} />
           </TouchableOpacity>
 
           {/* Text Input */}
@@ -100,23 +101,29 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               style={[
                 styles.sendButton,
                 { backgroundColor: theme.accent },
-                !inputText.trim() && [styles.sendButtonDisabled, { backgroundColor: theme.cardElevated }],
+                !inputText.trim() && [styles.sendButtonDisabled, { backgroundColor: theme.cardBorder }],
               ]}
               onPress={handleSend}
               disabled={!inputText.trim()}
               activeOpacity={0.8}
             >
-              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 16 }}>↑</Text>
+              <Icon name="arrow-up" size={16} color="#ffffff" />
             </TouchableOpacity>
           )}
         </View>
 
         {/* Engine status caption */}
         <View style={styles.captionContainer}>
+          <Icon
+            name={activeMode === 'on_device' ? 'cpu' : 'monitor'}
+            size={11}
+            color={theme.accent}
+            style={{ marginRight: 4 }}
+          />
           <Text style={[styles.captionText, { color: theme.textMuted }]}>
             {activeMode === 'on_device'
-              ? '⚡ Running offline via kernel virtual memory paging'
-              : '🖥️ Streaming from Desktop Fastify Gateway :8080'}
+              ? 'Running offline via kernel virtual memory paging'
+              : 'Streaming from Desktop Fastify Gateway :8080'}
           </Text>
         </View>
       </View>
@@ -146,9 +153,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  attachIcon: {
-    fontSize: 16,
-  },
   textInput: {
     flex: 1,
     fontSize: 14,
@@ -164,7 +168,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendButtonDisabled: {
-    opacity: 0.4,
+    opacity: 0.5,
   },
   stopSquare: {
     width: 10,
@@ -173,7 +177,9 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   captionContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 6,
   },
   captionText: {

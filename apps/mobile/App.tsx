@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Text,
   Platform,
+  Animated,
 } from 'react-native';
 import { darkTheme, lightTheme, Theme } from './src/theme/theme';
 import type {
@@ -21,28 +22,48 @@ import { DeviceProfiler, MOBILE_MODELS } from './src/engine/deviceProfiler';
 import { MobileMemoryPagingEngine } from './src/engine/memoryPaging';
 import { HybridRouter } from './src/engine/hybridRouter';
 import { HomeView } from './src/components/HomeView';
+import { ModelsView } from './src/components/ModelsView';
 import { ChatHeader } from './src/components/ChatHeader';
 import { ChatView } from './src/components/ChatView';
 import { MessageInput } from './src/components/MessageInput';
 import { MemoryGaugeModal } from './src/components/MemoryGaugeModal';
 import { PairingModal } from './src/components/PairingModal';
 import { ModelSelectorModal } from './src/components/ModelSelectorModal';
+import { Icon } from './src/components/common/Icon';
 
-type ActiveScreen = 'home' | 'chat';
+type ActiveScreen = 'home' | 'models' | 'chat';
 
 export default function App() {
-  // Theme state: dark vs light
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+  // Theme state: defaults to White Theme (Zaylo Desktop style)
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const theme: Theme = useMemo(
-    () => (themeMode === 'dark' ? darkTheme : lightTheme),
+    () => (themeMode === 'light' ? lightTheme : darkTheme),
     [themeMode]
   );
   const toggleTheme = () => {
-    setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  // Screen Navigation state (Defaults to Home Hub instead of raw chatbot!)
+  // Screen Navigation state (Defaults to Home Hub)
   const [activeScreen, setActiveScreen] = useState<ActiveScreen>('home');
+  const screenFadeAnim = useRef(new Animated.Value(1)).current;
+
+  const navigateToScreen = (screen: ActiveScreen) => {
+    if (screen === activeScreen) return;
+    Animated.sequence([
+      Animated.timing(screenFadeAnim, {
+        toValue: 0.2,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenFadeAnim, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    setActiveScreen(screen);
+  };
 
   // 1. Initial Device & Paging Profiling
   const initialProfile = useMemo(() => DeviceProfiler.profileDevice(), []);
@@ -89,9 +110,8 @@ export default function App() {
 
   // 7. Message Handlers
   const handleSendMessage = async (text: string) => {
-    // If sent from Home, ensure we switch to chat screen
     if (activeScreen !== 'chat') {
-      setActiveScreen('chat');
+      navigateToScreen('chat');
     }
 
     const userMessage: ChatMessage = {
@@ -117,7 +137,6 @@ export default function App() {
     try {
       const cancelFn = await router.dispatchPrompt(
         newHistory,
-        // On Token
         (chunk: string) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -125,7 +144,6 @@ export default function App() {
             )
           );
         },
-        // On Complete
         (metrics) => {
           setIsStreaming(false);
           cancelStreamRef.current = null;
@@ -137,7 +155,6 @@ export default function App() {
             )
           );
         },
-        // On Error
         (err) => {
           setIsStreaming(false);
           cancelStreamRef.current = null;
@@ -188,9 +205,9 @@ export default function App() {
   };
 
   const handleOpenChatWithPrompt = (initialPrompt?: string) => {
-    setActiveScreen('chat');
+    navigateToScreen('chat');
     if (initialPrompt) {
-      setTimeout(() => handleSendMessage(initialPrompt), 50);
+      setTimeout(() => handleSendMessage(initialPrompt), 80);
     }
   };
 
@@ -210,58 +227,74 @@ export default function App() {
         backgroundColor={theme.background}
       />
 
-      {/* Screen Router */}
-      {activeScreen === 'home' ? (
-        <HomeView
-          theme={theme}
-          mode={mode}
-          onToggleMode={setMode}
-          desktopHost={desktopHost}
-          activeLocalModel={activeLocalModel}
-          pagingConfig={pagingConfig}
-          profile={profile}
-          onOpenChat={handleOpenChatWithPrompt}
-          onOpenModelModal={() => setModelModalVisible(true)}
-          onOpenPairingModal={() => setPairingModalVisible(true)}
-          onOpenMemoryModal={() => setMemoryModalVisible(true)}
-          onToggleTheme={toggleTheme}
-        />
-      ) : (
-        <View style={styles.chatScreenContainer}>
-          {/* Chat Dedicated Top Header */}
-          <ChatHeader
+      {/* Screen Container with animated transition */}
+      <Animated.View style={[styles.screenContainer, { opacity: screenFadeAnim }]}>
+        {activeScreen === 'home' && (
+          <HomeView
             theme={theme}
             mode={mode}
+            onToggleMode={setMode}
             desktopHost={desktopHost}
             activeLocalModel={activeLocalModel}
-            onBackToHome={() => setActiveScreen('home')}
-            onOpenModelModal={() => setModelModalVisible(true)}
-            onClearChat={handleClearChat}
+            pagingConfig={pagingConfig}
+            profile={profile}
+            onOpenChat={handleOpenChatWithPrompt}
+            onOpenModelModal={() => navigateToScreen('models')}
+            onOpenPairingModal={() => setPairingModalVisible(true)}
+            onOpenMemoryModal={() => setMemoryModalVisible(true)}
             onToggleTheme={toggleTheme}
           />
+        )}
 
-          {/* Chat Messages Body */}
-          <ChatView
+        {activeScreen === 'models' && (
+          <ModelsView
             theme={theme}
-            messages={messages}
-            isStreaming={isStreaming}
-            activeMode={mode}
-            onSelectPromptSuggestion={handleSendMessage}
+            activeModel={activeLocalModel}
+            profile={profile}
+            pagingConfig={pagingConfig}
+            onSelectModel={handleSelectModel}
+            onBackToHome={() => navigateToScreen('home')}
+            onOpenChat={() => navigateToScreen('chat')}
           />
+        )}
 
-          {/* Floating Message Input */}
-          <MessageInput
-            theme={theme}
-            onSendMessage={handleSendMessage}
-            onStopGeneration={handleStopGeneration}
-            isStreaming={isStreaming}
-            activeMode={mode}
-            onAttachMedia={() => {
-              handleSendMessage('[Attached image from camera: diagram.png] Please analyze this image.');
-            }}
-          />
-        </View>
-      )}
+        {activeScreen === 'chat' && (
+          <View style={styles.chatScreenContainer}>
+            {/* Chat Dedicated Top Header */}
+            <ChatHeader
+              theme={theme}
+              mode={mode}
+              desktopHost={desktopHost}
+              activeLocalModel={activeLocalModel}
+              onBackToHome={() => navigateToScreen('home')}
+              onOpenModelModal={() => navigateToScreen('models')}
+              onClearChat={handleClearChat}
+              onToggleTheme={toggleTheme}
+            />
+
+            {/* Chat Messages Body */}
+            <ChatView
+              theme={theme}
+              messages={messages}
+              isStreaming={isStreaming}
+              activeMode={mode}
+              onSelectPromptSuggestion={handleSendMessage}
+            />
+
+            {/* Floating Message Input */}
+            <MessageInput
+              theme={theme}
+              onSendMessage={handleSendMessage}
+              onStopGeneration={handleStopGeneration}
+              isStreaming={isStreaming}
+              activeMode={mode}
+              onAttachMedia={() => {
+                handleSendMessage('[Attached image from camera: diagram.png] Please analyze this image.');
+              }}
+            />
+          </View>
+        )}
+      </Animated.View>
 
       {/* Bottom Global Navigation Bar */}
       <View
@@ -276,12 +309,14 @@ export default function App() {
       >
         <TouchableOpacity
           style={[styles.navTab, activeScreen === 'home' && styles.navTabActive]}
-          onPress={() => setActiveScreen('home')}
+          onPress={() => navigateToScreen('home')}
           activeOpacity={0.7}
         >
-          <Text style={[styles.navTabIcon, activeScreen === 'home' && { color: theme.accent }]}>
-            🏠
-          </Text>
+          <Icon
+            name="home"
+            size={19}
+            color={activeScreen === 'home' ? theme.accent : theme.textMuted}
+          />
           <Text
             style={[
               styles.navTabLabel,
@@ -293,13 +328,35 @@ export default function App() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.navTab, activeScreen === 'chat' && styles.navTabActive]}
-          onPress={() => setActiveScreen('chat')}
+          style={[styles.navTab, activeScreen === 'models' && styles.navTabActive]}
+          onPress={() => navigateToScreen('models')}
           activeOpacity={0.7}
         >
-          <Text style={[styles.navTabIcon, activeScreen === 'chat' && { color: theme.accent }]}>
-            💬
+          <Icon
+            name="cpu"
+            size={19}
+            color={activeScreen === 'models' ? theme.accent : theme.textMuted}
+          />
+          <Text
+            style={[
+              styles.navTabLabel,
+              { color: activeScreen === 'models' ? theme.accent : theme.textMuted },
+            ]}
+          >
+            Models
           </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.navTab, activeScreen === 'chat' && styles.navTabActive]}
+          onPress={() => navigateToScreen('chat')}
+          activeOpacity={0.7}
+        >
+          <Icon
+            name="message-square"
+            size={19}
+            color={activeScreen === 'chat' ? theme.accent : theme.textMuted}
+          />
           <Text
             style={[
               styles.navTabLabel,
@@ -312,19 +369,10 @@ export default function App() {
 
         <TouchableOpacity
           style={styles.navTab}
-          onPress={() => setModelModalVisible(true)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.navTabIcon}>🧠</Text>
-          <Text style={[styles.navTabLabel, { color: theme.textMuted }]}>Models</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navTab}
           onPress={() => setPairingModalVisible(true)}
           activeOpacity={0.7}
         >
-          <Text style={styles.navTabIcon}>🖥️</Text>
+          <Icon name="monitor" size={19} color={theme.textMuted} />
           <Text style={[styles.navTabLabel, { color: theme.textMuted }]}>Desktop</Text>
         </TouchableOpacity>
 
@@ -333,8 +381,8 @@ export default function App() {
           onPress={() => setMemoryModalVisible(true)}
           activeOpacity={0.7}
         >
-          <Text style={styles.navTabIcon}>📊</Text>
-          <Text style={[styles.navTabLabel, { color: theme.textMuted }]}>RAM</Text>
+          <Icon name="server" size={19} color={theme.textMuted} />
+          <Text style={[styles.navTabLabel, { color: theme.textMuted }]}>System</Text>
         </TouchableOpacity>
       </View>
 
@@ -375,6 +423,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  screenContainer: {
+    flex: 1,
+  },
   chatScreenContainer: {
     flex: 1,
   },
@@ -391,13 +442,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 4,
     paddingHorizontal: 12,
+    gap: 4,
   },
   navTabActive: {
     transform: [{ scale: 1.05 }],
-  },
-  navTabIcon: {
-    fontSize: 20,
-    marginBottom: 2,
   },
   navTabLabel: {
     fontSize: 10,

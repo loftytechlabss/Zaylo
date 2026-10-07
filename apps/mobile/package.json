@@ -13,6 +13,7 @@
     "clean": "rm -rf .expo dist"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
     "expo": "~57.0.27",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",

@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { colors } from '../theme/colors';
 import type { HybridMode, DesktopHost, OnDeviceModel, MemoryPagingConfig } from '../types';
+import { Icon } from './common/Icon';
 
 interface HeaderProps {
   mode: HybridMode;
@@ -38,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
         <View style={styles.brandContainer}>
           <Text style={styles.brandTitle}>ZAYLO</Text>
           <View style={styles.badgePill}>
-            <Text style={styles.badgeText}>MOBILE</Text>
+            <Text style={styles.badgeText}>DESKTOP ENGINE</Text>
           </View>
         </View>
 
@@ -61,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
             onPress={onOpenPairingModal}
             activeOpacity={0.7}
           >
-            <Text style={styles.iconButtonText}>🖥️</Text>
+            <Icon name="monitor" size={15} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -73,9 +74,9 @@ export const Header: React.FC<HeaderProps> = ({
           onPress={() => onToggleMode('on_device')}
           activeOpacity={0.8}
         >
-          <View style={[styles.statusIndicator, styles.statusLocal]} />
+          <Icon name="cpu" size={14} color={!isDesktop ? colors.accent : colors.textMuted} />
           <Text style={[styles.switcherLabel, !isDesktop && styles.switcherLabelActive]}>
-            ⚡ On-Device Engine
+            On-Device Engine
           </Text>
         </TouchableOpacity>
 
@@ -84,14 +85,9 @@ export const Header: React.FC<HeaderProps> = ({
           onPress={() => onToggleMode('desktop')}
           activeOpacity={0.8}
         >
-          <View 
-            style={[
-              styles.statusIndicator, 
-              desktopHost.isConnected ? styles.statusOnline : styles.statusOffline
-            ]} 
-          />
+          <Icon name="monitor" size={14} color={isDesktop ? colors.accent : colors.textMuted} />
           <Text style={[styles.switcherLabel, isDesktop && styles.switcherLabelActive]}>
-            🖥️ Desktop Host
+            Desktop Host
           </Text>
         </TouchableOpacity>
       </View>
@@ -108,7 +104,7 @@ export const Header: React.FC<HeaderProps> = ({
             ? (desktopHost.isConnected ? (desktopHost.activeModelName || 'Desktop Model') : 'Disconnected (Tap to Pair)') 
             : `${activeLocalModel.name} (${activeLocalModel.quantization})`}
         </Text>
-        <Text style={styles.modelBarChevron}>▾</Text>
+        <Icon name="chevron-down" size={13} color={colors.textMuted} />
       </TouchableOpacity>
     </View>
   );
@@ -149,9 +145,9 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
-    color: colors.cyan,
+    color: colors.accent,
     letterSpacing: 1,
   },
   actionsContainer: {
@@ -174,7 +170,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.cyan,
+    backgroundColor: colors.accent,
   },
   gaugeText: {
     fontSize: 11,
@@ -195,12 +191,9 @@ const styles = StyleSheet.create({
   iconButtonActive: {
     borderColor: colors.success,
   },
-  iconButtonText: {
-    fontSize: 14,
-  },
   switcherContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.card,
+    backgroundColor: colors.backgroundSecondary,
     borderRadius: 12,
     padding: 3,
     borderWidth: 1,
@@ -216,9 +209,9 @@ const styles = StyleSheet.create({
     borderRadius: 9,
   },
   switcherTabActive: {
-    backgroundColor: colors.cardElevated,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#383842',
+    borderColor: colors.cardBorder,
   },
   switcherLabel: {
     fontSize: 12,
@@ -227,20 +220,6 @@ const styles = StyleSheet.create({
   },
   switcherLabelActive: {
     color: colors.textPrimary,
-  },
-  statusIndicator: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusLocal: {
-    backgroundColor: colors.cyan,
-  },
-  statusOnline: {
-    backgroundColor: colors.success,
-  },
-  statusOffline: {
-    backgroundColor: colors.danger,
   },
   modelBar: {
     flexDirection: 'row',
@@ -260,9 +239,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary,
     fontWeight: '500',
-  },
-  modelBarChevron: {
-    fontSize: 12,
-    color: colors.textMuted,
   },
 });

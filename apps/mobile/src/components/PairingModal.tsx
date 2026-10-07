@@ -8,9 +8,10 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { darkTheme, Theme } from '../theme/theme';
+import { lightTheme, Theme } from '../theme/theme';
 import type { DesktopHost } from '../types';
 import { DesktopClient } from '../engine/desktopClient';
+import { Icon } from './common/Icon';
 
 interface PairingModalProps {
   visible: boolean;
@@ -25,7 +26,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
   onClose,
   host,
   onConnectHost,
-  theme = darkTheme,
+  theme = lightTheme,
 }) => {
   const [url, setUrl] = useState(host.url || 'http://192.168.1.100:8080');
   const [apiKey, setApiKey] = useState(host.apiKey || '');
@@ -67,16 +68,16 @@ export const PairingModal: React.FC<PairingModalProps> = ({
         >
           <View style={[styles.header, { borderBottomColor: theme.cardBorder }]}>
             <View>
-              <Text style={[styles.title, { color: theme.textPrimary }]}>Desktop Sync</Text>
+              <Text style={[styles.title, { color: theme.textPrimary }]}>Desktop Gateway</Text>
               <Text style={[styles.subtitle, { color: theme.textMuted }]}>
-                Pair with Zaylo Desktop Host on Wi-Fi
+                Pair with Zaylo Desktop Host on local Wi-Fi
               </Text>
             </View>
             <TouchableOpacity
               onPress={onClose}
               style={[styles.closeButton, { backgroundColor: theme.backgroundSecondary }]}
             >
-              <Text style={[styles.closeText, { color: theme.textSecondary }]}>✕</Text>
+              <Icon name="x" size={16} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -125,7 +126,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                   {
                     backgroundColor: testResult.startsWith('✓')
                       ? theme.successLight
-                      : 'rgba(239, 68, 68, 0.12)',
+                      : 'rgba(239, 68, 68, 0.1)',
                     borderColor: testResult.startsWith('✓')
                       ? theme.success
                       : theme.danger,
@@ -166,9 +167,9 @@ export const PairingModal: React.FC<PairingModalProps> = ({
             </TouchableOpacity>
 
             <View style={[styles.tipCard, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
-              <Text style={{ fontSize: 16 }}>💡</Text>
+              <Icon name="info" size={16} color={theme.accent} />
               <Text style={[styles.tipText, { color: theme.textMuted }]}>
-                Ensure your phone and Mac/PC are connected to the same Wi-Fi network and Zaylo Desktop Host is running.
+                Ensure your phone and computer are on the same Wi-Fi network and Zaylo Desktop Host is running on port 8080.
               </Text>
             </View>
           </View>
@@ -181,14 +182,14 @@ export const PairingModal: React.FC<PairingModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalCard: {
     width: '100%',
-    borderRadius: 22,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: 'hidden',
   },
@@ -200,7 +201,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
   },
   subtitle: {
@@ -214,10 +215,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
   content: {
     padding: 18,
   },
@@ -229,17 +226,17 @@ const styles = StyleSheet.create({
   },
   input: {
     fontSize: 14,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   resultBox: {
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   resultText: {
     fontSize: 12,
@@ -247,11 +244,11 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   connectButton: {
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: 13,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   connectButtonText: {
     color: '#ffffff',
@@ -263,7 +260,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
   },
   tipText: {

@@ -15,6 +15,8 @@ import type {
   MemoryPagingConfig,
   DeviceMemoryProfile,
 } from '../types';
+import { ZLogo } from './common/ZLogo';
+import { Icon } from './common/Icon';
 
 interface HomeViewProps {
   theme: Theme;
@@ -31,30 +33,30 @@ interface HomeViewProps {
   onToggleTheme: () => void;
 }
 
-const FEATURE_PROMPTS = [
+const QUICK_ACTIONS = [
   {
-    icon: '⚡',
-    title: 'Code Refactor',
-    desc: 'Write an async LRU cache in TypeScript with tests',
-    tag: 'Coding',
+    iconName: 'code',
+    title: 'Code Generation',
+    desc: 'Write clean algorithms, handlers, or unit tests',
+    prompt: 'Write an asynchronous LRU Cache in TypeScript with full type safety and comments.',
   },
   {
-    icon: '🔒',
-    title: 'Privacy Audit',
-    desc: 'Explain how local kernel virtual memory paging works',
-    tag: 'Security',
+    iconName: 'file-text',
+    title: 'Technical Summary',
+    desc: 'Analyze documentation and architectural trade-offs',
+    prompt: 'Summarize the key differences between LoRA and QLoRA fine-tuning methods.',
   },
   {
-    icon: '📄',
-    title: 'Document Analysis',
-    desc: 'Summarize the differences between LoRA and QLoRA',
-    tag: 'Analysis',
+    iconName: 'terminal',
+    title: 'System Debugging',
+    desc: 'Inspect error logs and resolve runtime exceptions',
+    prompt: 'Help me debug a network connection timeout issue in a Node.js client.',
   },
   {
-    icon: '🧪',
-    title: 'Speed Benchmark',
-    desc: 'Benchmark tokens per second on Apple Neural Engine',
-    tag: 'Telemetry',
+    iconName: 'help-circle',
+    title: 'Concept Breakdown',
+    desc: 'Explain advanced algorithms in simple terms',
+    prompt: 'Explain how vector embeddings and cosine similarity search work.',
   },
 ];
 
@@ -64,8 +66,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onToggleMode,
   desktopHost,
   activeLocalModel,
-  pagingConfig,
-  profile,
   onOpenChat,
   onOpenModelModal,
   onOpenPairingModal,
@@ -73,10 +73,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onToggleTheme,
 }) => {
   const isDesktop = mode === 'desktop';
-  const memoryPct = Math.min(
-    100,
-    Math.round((pagingConfig.estimatedFootprintMb / (profile.availableRamMb || 2048)) * 100)
-  );
 
   return (
     <ScrollView
@@ -84,26 +80,40 @@ export const HomeView: React.FC<HomeViewProps> = ({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* 1. Header with Brand, Status Pill & Theme Switcher */}
+      {/* 1. Header with Official Geometric Z Logo & Theme Switcher */}
       <View style={styles.headerRow}>
         <View style={styles.brandGroup}>
-          <View style={[styles.brandIconBox, { backgroundColor: theme.accentLight }]}>
-            <Text style={[styles.brandIconText, { color: theme.accent }]}>Z</Text>
-          </View>
-          <View>
+          <ZLogo
+            size={30}
+            variant={theme.isDark ? 'white' : 'dark'}
+            withContainer
+            containerBg={theme.isDark ? '#1a1d26' : '#f1f5f9'}
+            containerStyle={{
+              borderWidth: 1,
+              borderColor: theme.cardBorder,
+            }}
+          />
+          <View style={styles.brandTextContainer}>
             <View style={styles.brandTitleRow}>
               <Text style={[styles.brandTitle, { color: theme.textPrimary }]}>ZAYLO</Text>
-              <View style={[styles.proBadge, { backgroundColor: theme.cardElevated, borderColor: theme.cardBorder }]}>
-                <Text style={[styles.proBadgeText, { color: theme.cyan }]}>MOBILE</Text>
+              <View
+                style={[
+                  styles.brandPill,
+                  {
+                    backgroundColor: theme.accentLight,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+              >
+                <Text style={[styles.brandPillText, { color: theme.accent }]}>AI STUDIO</Text>
               </View>
             </View>
             <Text style={[styles.brandSubtitle, { color: theme.textMuted }]}>
-              Local Neural Inference
+              Local Inference & Desktop Server
             </Text>
           </View>
         </View>
 
-        {/* Theme Toggle Button */}
         <TouchableOpacity
           style={[
             styles.themeButton,
@@ -113,306 +123,403 @@ export const HomeView: React.FC<HomeViewProps> = ({
           onPress={onToggleTheme}
           activeOpacity={0.7}
         >
-          <Text style={styles.themeButtonIcon}>{theme.isDark ? '☀️' : '🌙'}</Text>
+          <Icon
+            name={theme.isDark ? 'sun' : 'moon'}
+            size={18}
+            color={theme.accent}
+          />
         </TouchableOpacity>
       </View>
 
-      {/* 2. Hero Engine Status Card */}
+      {/* 2. Zaylo Overview Dashboard Card (Desktop Style) */}
       <View
         style={[
-          styles.heroCard,
+          styles.overviewCard,
           {
             backgroundColor: theme.card,
             borderColor: theme.cardBorder,
           },
-          theme.shadows.md,
+          theme.shadows.sm,
         ]}
       >
-        <View style={styles.heroTopRow}>
-          <Text style={[styles.sectionOverline, { color: theme.textMuted }]}>
-            ACTIVE INFERENCE RUNTIME
-          </Text>
+        {/* Runtime Header */}
+        <View style={styles.overviewTopRow}>
+          <View>
+            <Text style={[styles.sectionOverline, { color: theme.textMuted }]}>
+              INFERENCE RUNTIME
+            </Text>
+            <Text style={[styles.sectionHeading, { color: theme.textPrimary }]}>
+              {isDesktop ? 'Zaylo Desktop Server' : 'Local Inference Engine'}
+            </Text>
+          </View>
+
           <View
             style={[
-              styles.liveIndicator,
+              styles.statusBadge,
               {
                 backgroundColor: isDesktop
                   ? desktopHost.isConnected
                     ? theme.successLight
-                    : 'rgba(239, 68, 68, 0.12)'
-                  : theme.cyanLight,
+                    : 'rgba(239, 68, 68, 0.1)'
+                  : theme.successLight,
+                borderColor: isDesktop
+                  ? desktopHost.isConnected
+                    ? theme.success
+                    : theme.danger
+                  : theme.success,
               },
             ]}
           >
             <View
               style={[
-                styles.liveDot,
+                styles.statusDot,
                 {
                   backgroundColor: isDesktop
                     ? desktopHost.isConnected
                       ? theme.success
                       : theme.danger
-                    : theme.cyan,
+                    : theme.success,
                 },
               ]}
             />
             <Text
               style={[
-                styles.liveText,
+                styles.statusBadgeText,
                 {
                   color: isDesktop
                     ? desktopHost.isConnected
                       ? theme.success
                       : theme.danger
-                    : theme.cyan,
+                    : theme.success,
                 },
               ]}
             >
               {isDesktop
                 ? desktopHost.isConnected
-                  ? 'Desktop Paired'
+                  ? 'Connected'
                   : 'Host Offline'
-                : 'On-Device ANE'}
+                : 'Online'}
             </Text>
           </View>
         </View>
 
-        {/* Segmented Mode Switcher */}
-        <View style={[styles.modeSwitcher, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
+        {/* Runtime Mode Switcher */}
+        <View
+          style={[
+            styles.modeSwitcher,
+            {
+              backgroundColor: theme.backgroundSecondary,
+              borderColor: theme.cardBorder,
+            },
+          ]}
+        >
           <TouchableOpacity
             style={[
               styles.modeTab,
-              !isDesktop && [styles.modeTabActive, { backgroundColor: theme.card }, theme.shadows.sm],
+              !isDesktop && [
+                styles.modeTabActive,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                },
+                theme.shadows.sm,
+              ],
             ]}
             onPress={() => onToggleMode('on_device')}
             activeOpacity={0.8}
           >
-            <Text style={styles.modeTabIcon}>⚡</Text>
+            <Icon
+              name="cpu"
+              size={15}
+              color={!isDesktop ? theme.accent : theme.textMuted}
+            />
             <Text
               style={[
                 styles.modeTabLabel,
                 { color: !isDesktop ? theme.textPrimary : theme.textMuted },
               ]}
             >
-              On-Device
+              On-Device Model
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
               styles.modeTab,
-              isDesktop && [styles.modeTabActive, { backgroundColor: theme.card }, theme.shadows.sm],
+              isDesktop && [
+                styles.modeTabActive,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                },
+                theme.shadows.sm,
+              ],
             ]}
             onPress={() => onToggleMode('desktop')}
             activeOpacity={0.8}
           >
-            <Text style={styles.modeTabIcon}>🖥️</Text>
+            <Icon
+              name="monitor"
+              size={15}
+              color={isDesktop ? theme.accent : theme.textMuted}
+            />
             <Text
               style={[
                 styles.modeTabLabel,
                 { color: isDesktop ? theme.textPrimary : theme.textMuted },
               ]}
             >
-              Desktop Host
+              Desktop Host :8080
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Telemetry info row */}
-        <View style={[styles.telemetryBox, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
-          <View style={styles.telemetryRow}>
+        {/* Loaded Model Info Block */}
+        <View
+          style={[
+            styles.loadedModelBlock,
+            {
+              backgroundColor: theme.backgroundSecondary,
+              borderColor: theme.cardBorder,
+            },
+          ]}
+        >
+          <View style={styles.loadedModelRow}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.telemetryLabel, { color: theme.textMuted }]}>
-                {isDesktop ? 'HOST / MODEL' : 'ACTIVE MODEL'}
+              <Text style={[styles.loadedModelLabel, { color: theme.textMuted }]}>
+                {isDesktop ? 'DESKTOP MODEL' : 'ACTIVE MODEL'}
               </Text>
-              <Text style={[styles.telemetryValue, { color: theme.textPrimary }]} numberOfLines={1}>
+              <Text
+                style={[styles.loadedModelName, { color: theme.textPrimary }]}
+                numberOfLines={1}
+              >
                 {isDesktop
                   ? desktopHost.isConnected
                     ? desktopHost.activeModelName || 'Desktop Model'
-                    : 'Tap to connect host'
+                    : 'Pair Zaylo Desktop Host'
                   : activeLocalModel.name}
               </Text>
             </View>
 
             <TouchableOpacity
               onPress={isDesktop ? onOpenPairingModal : onOpenModelModal}
-              style={[styles.chipButton, { backgroundColor: theme.accentLight, borderColor: theme.accent }]}
+              style={[
+                styles.changeModelBtn,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                },
+                theme.shadows.sm,
+              ]}
+              activeOpacity={0.7}
             >
-              <Text style={[styles.chipButtonText, { color: theme.accent }]}>
-                {isDesktop ? 'Config Host' : 'Change'}
+              <Text style={[styles.changeModelBtnText, { color: theme.accent }]}>
+                {isDesktop ? 'Configure Host' : 'Change Model'}
               </Text>
+              <Icon name="chevron-right" size={13} color={theme.accent} />
             </TouchableOpacity>
           </View>
-
-          {/* Progress / Memory bar for on-device */}
-          {!isDesktop && (
-            <View style={styles.memoryBarContainer}>
-              <View style={styles.memoryBarHeader}>
-                <Text style={[styles.memoryBarLabel, { color: theme.textMuted }]}>
-                  Paged Memory Footprint
-                </Text>
-                <Text style={[styles.memoryBarValue, { color: theme.cyan }]}>
-                  {pagingConfig.estimatedFootprintMb} MB / {profile.availableRamMb} MB ({memoryPct}%)
-                </Text>
-              </View>
-              <View style={[styles.progressBarBg, { backgroundColor: theme.cardBorder }]}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    {
-                      width: `${Math.min(100, Math.max(8, memoryPct))}%`,
-                      backgroundColor: theme.cyan,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          )}
         </View>
       </View>
 
       {/* 3. Primary Prompt Action Launcher */}
       <TouchableOpacity
         style={[
-          styles.promptLauncher,
+          styles.startChatBanner,
           {
             backgroundColor: theme.card,
             borderColor: theme.cardBorder,
           },
-          theme.shadows.md,
+          theme.shadows.sm,
         ]}
         onPress={() => onOpenChat()}
-        activeOpacity={0.8}
+        activeOpacity={0.85}
       >
-        <View style={styles.promptLauncherLeft}>
-          <View style={[styles.promptLauncherIcon, { backgroundColor: theme.accentLight }]}>
-            <Text style={{ fontSize: 18 }}>💬</Text>
+        <View style={styles.startChatLeft}>
+          <View
+            style={[
+              styles.startChatIconBox,
+              { backgroundColor: theme.accentLight },
+            ]}
+          >
+            <Icon name="message-square" size={19} color={theme.accent} />
           </View>
-          <View>
-            <Text style={[styles.promptLauncherTitle, { color: theme.textPrimary }]}>
-              Start New Chat
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.startChatTitle, { color: theme.textPrimary }]}>
+              Start New Conversation
             </Text>
-            <Text style={[styles.promptLauncherSubtitle, { color: theme.textMuted }]}>
-              Ask anything locally with zero cloud delay...
+            <Text style={[styles.startChatSubtitle, { color: theme.textMuted }]}>
+              Run prompts locally or stream from Desktop server
             </Text>
           </View>
         </View>
-        <View style={[styles.promptLauncherArrow, { backgroundColor: theme.accent }]}>
-          <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 16 }}>→</Text>
+        <View
+          style={[
+            styles.startChatArrow,
+            { backgroundColor: theme.accent },
+          ]}
+        >
+          <Icon name="arrow-right" size={16} color="#ffffff" />
         </View>
       </TouchableOpacity>
 
-      {/* 4. Core Capabilities 4-Grid */}
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Core Capabilities</Text>
+      {/* 4. Core Workspaces 4-Grid */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
+          Workspaces
+        </Text>
         <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
-          Zero-cloud private tools
+          Local developer tools
         </Text>
       </View>
 
-      <View style={styles.quickGrid}>
+      <View style={styles.gridContainer}>
         <TouchableOpacity
-          style={[styles.gridCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }, theme.shadows.sm]}
+          style={[
+            styles.gridCard,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            theme.shadows.sm,
+          ]}
           onPress={() => onOpenChat()}
           activeOpacity={0.7}
         >
-          <View style={[styles.gridIconCircle, { backgroundColor: theme.accentLight }]}>
-            <Text style={styles.gridIconText}>💬</Text>
+          <View
+            style={[
+              styles.gridIconCircle,
+              { backgroundColor: theme.accentLight },
+            ]}
+          >
+            <Icon name="message-square" size={18} color={theme.accent} />
           </View>
-          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>Chat Studio</Text>
+          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>
+            Chat Studio
+          </Text>
           <Text style={[styles.gridDesc, { color: theme.textMuted }]}>
-            Full conversation with kernel memory paging
+            Interactive chat with active LLM weights
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.gridCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }, theme.shadows.sm]}
+          style={[
+            styles.gridCard,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            theme.shadows.sm,
+          ]}
           onPress={onOpenModelModal}
           activeOpacity={0.7}
         >
-          <View style={[styles.gridIconCircle, { backgroundColor: theme.cyanLight }]}>
-            <Text style={styles.gridIconText}>🧠</Text>
+          <View
+            style={[
+              styles.gridIconCircle,
+              { backgroundColor: theme.accentLight },
+            ]}
+          >
+            <Icon name="cpu" size={18} color={theme.accent} />
           </View>
-          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>Model Studio</Text>
+          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>
+            Model Studio
+          </Text>
           <Text style={[styles.gridDesc, { color: theme.textMuted }]}>
-            Switch SLMs: Llama-3.2, Qwen-2.5, DeepSeek
+            Browse Llama, Qwen, Mistral & DeepSeek
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.gridCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }, theme.shadows.sm]}
+          style={[
+            styles.gridCard,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            theme.shadows.sm,
+          ]}
           onPress={onOpenPairingModal}
           activeOpacity={0.7}
         >
-          <View style={[styles.gridIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.14)' }]}>
-            <Text style={styles.gridIconText}>🖥️</Text>
+          <View
+            style={[
+              styles.gridIconCircle,
+              { backgroundColor: theme.successLight },
+            ]}
+          >
+            <Icon name="monitor" size={18} color={theme.success} />
           </View>
-          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>Desktop Sync</Text>
+          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>
+            Desktop Gateway
+          </Text>
           <Text style={[styles.gridDesc, { color: theme.textMuted }]}>
-            Pair Zaylo Desktop Host over local Wi-Fi
+            Pair with Fastify Host on local Wi-Fi
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.gridCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }, theme.shadows.sm]}
+          style={[
+            styles.gridCard,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            theme.shadows.sm,
+          ]}
           onPress={onOpenMemoryModal}
           activeOpacity={0.7}
         >
-          <View style={[styles.gridIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.14)' }]}>
-            <Text style={styles.gridIconText}>📊</Text>
+          <View
+            style={[
+              styles.gridIconCircle,
+              { backgroundColor: theme.accentLight },
+            ]}
+          >
+            <Icon name="activity" size={18} color={theme.accent} />
           </View>
-          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>RAM Gauge</Text>
+          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>
+            Telemetry & Info
+          </Text>
           <Text style={[styles.gridDesc, { color: theme.textMuted }]}>
-            Virtual memory chunking and health metrics
+            Client runtime specs & connection health
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* 5. Suggested Prompts List */}
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Instant Prompts</Text>
+      {/* 5. Prompt Starters */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
+          Prompt Starters
+        </Text>
         <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
           Tap any card to launch immediately
         </Text>
       </View>
 
-      <View style={styles.promptsContainer}>
-        {FEATURE_PROMPTS.map((p, idx) => (
+      <View style={styles.promptsList}>
+        {QUICK_ACTIONS.map((item, idx) => (
           <TouchableOpacity
             key={idx}
             style={[
               styles.promptCard,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+              },
               theme.shadows.sm,
             ]}
-            onPress={() => onOpenChat(p.desc)}
+            onPress={() => onOpenChat(item.prompt)}
             activeOpacity={0.7}
           >
-            <View style={styles.promptCardHeader}>
-              <View style={styles.promptIconRow}>
-                <Text style={styles.promptIcon}>{p.icon}</Text>
-                <Text style={[styles.promptTitle, { color: theme.textPrimary }]}>{p.title}</Text>
-              </View>
-              <View style={[styles.promptTag, { backgroundColor: theme.backgroundSecondary }]}>
-                <Text style={[styles.promptTagText, { color: theme.textSecondary }]}>{p.tag}</Text>
+            <View style={styles.promptCardTop}>
+              <View style={styles.promptIconTitle}>
+                <View
+                  style={[
+                    styles.promptIconBox,
+                    { backgroundColor: theme.accentLight },
+                  ]}
+                >
+                  <Icon name={item.iconName} size={15} color={theme.accent} />
+                </View>
+                <Text style={[styles.promptTitle, { color: theme.textPrimary }]}>
+                  {item.title}
+                </Text>
               </View>
             </View>
-            <Text style={[styles.promptDesc, { color: theme.textSecondary }]}>{p.desc}</Text>
+            <Text style={[styles.promptDesc, { color: theme.textSecondary }]}>
+              {item.desc}
+            </Text>
           </TouchableOpacity>
         ))}
-      </View>
-
-      {/* 6. Air-Gapped Privacy Footer Badge */}
-      <View style={[styles.privacyCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-        <Text style={styles.privacyIcon}>🔒</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.privacyTitle, { color: theme.textPrimary }]}>
-            100% Zero-Cloud Private AI
-          </Text>
-          <Text style={[styles.privacyDesc, { color: theme.textMuted }]}>
-            All prompts and weights remain strictly on your device and local LAN.
-          </Text>
-        </View>
       </View>
     </ScrollView>
   );
@@ -423,32 +530,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 16 : 24,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 14 : 18,
+    paddingBottom: 36,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   brandGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  brandIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandIconText: {
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: -1,
+  brandTextContainer: {
+    gap: 2,
   },
   brandTitleRow: {
     flexDirection: 'row',
@@ -458,74 +556,76 @@ const styles = StyleSheet.create({
   brandTitle: {
     fontSize: 20,
     fontWeight: '900',
-    letterSpacing: 2,
+    letterSpacing: 1.2,
   },
-  proBadge: {
+  brandPill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
   },
-  proBadgeText: {
-    fontSize: 10,
+  brandPillText: {
+    fontSize: 9,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   brandSubtitle: {
     fontSize: 11,
     fontWeight: '500',
-    marginTop: 1,
   },
   themeButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
   },
-  themeButtonIcon: {
-    fontSize: 18,
-  },
-  heroCard: {
-    borderRadius: 20,
+  overviewCard: {
+    borderRadius: 16,
     borderWidth: 1,
     padding: 16,
     marginBottom: 16,
   },
-  heroTopRow: {
+  overviewTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    marginBottom: 14,
   },
   sectionOverline: {
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.6,
+    marginBottom: 2,
   },
-  liveIndicator: {
+  sectionHeading: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 12,
+    borderWidth: 1,
   },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
-  liveText: {
+  statusBadgeText: {
     fontSize: 11,
     fontWeight: '700',
   },
   modeSwitcher: {
     flexDirection: 'row',
     borderRadius: 12,
-    padding: 4,
     borderWidth: 1,
+    padding: 3,
     marginBottom: 12,
   },
   modeTab: {
@@ -539,215 +639,155 @@ const styles = StyleSheet.create({
   },
   modeTabActive: {
     borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  modeTabIcon: {
-    fontSize: 14,
   },
   modeTabLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
-  telemetryBox: {
+  loadedModelBlock: {
     borderRadius: 12,
     borderWidth: 1,
     padding: 12,
   },
-  telemetryRow: {
+  loadedModelRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    alignItems: 'center',
   },
-  telemetryLabel: {
-    fontSize: 10,
-    fontWeight: '700',
+  loadedModelLabel: {
+    fontSize: 9,
+    fontWeight: '800',
     letterSpacing: 0.5,
+    marginBottom: 2,
   },
-  telemetryValue: {
+  loadedModelName: {
     fontSize: 13,
     fontWeight: '700',
-    marginTop: 2,
   },
-  chipButton: {
+  changeModelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
   },
-  chipButtonText: {
+  changeModelBtnText: {
     fontSize: 11,
     fontWeight: '700',
   },
-  memoryBarContainer: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(150, 150, 150, 0.2)',
-  },
-  memoryBarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  memoryBarLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  memoryBarValue: {
-    fontSize: 11,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  progressBarBg: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  promptLauncher: {
+  startChatBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     padding: 14,
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  promptLauncherLeft: {
+  startChatLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     flex: 1,
+    marginRight: 8,
   },
-  promptLauncherIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  promptLauncherTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  promptLauncherSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  promptLauncherArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  sectionHeader: {
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  quickGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
-  },
-  gridCard: {
-    width: '48%',
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-  },
-  gridIconCircle: {
+  startChatIconBox: {
     width: 38,
     height: 38,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  startChatTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  startChatSubtitle: {
+    fontSize: 11,
+  },
+  startChatArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionHeaderRow: {
     marginBottom: 10,
   },
-  gridIconText: {
-    fontSize: 18,
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  sectionSubtitle: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 20,
+  },
+  gridCard: {
+    width: '48%',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+  },
+  gridIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   gridTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   gridDesc: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 10,
+    lineHeight: 14,
   },
-  promptsContainer: {
-    gap: 10,
-    marginBottom: 24,
+  promptsList: {
+    gap: 8,
+    marginBottom: 18,
   },
   promptCard: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    padding: 14,
+    padding: 12,
   },
-  promptCardHeader: {
+  promptCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
-  promptIconRow: {
+  promptIconTitle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  promptIcon: {
-    fontSize: 16,
+  promptIconBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   promptTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  promptTag: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  promptTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  promptDesc: {
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  privacyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-  },
-  privacyIcon: {
-    fontSize: 22,
-  },
-  privacyTitle: {
     fontSize: 13,
     fontWeight: '700',
   },
-  privacyDesc: {
+  promptDesc: {
     fontSize: 11,
     lineHeight: 15,
-    marginTop: 2,
   },
 });

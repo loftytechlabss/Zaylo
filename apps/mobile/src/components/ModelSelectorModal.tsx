@@ -7,9 +7,10 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { darkTheme, Theme } from '../theme/theme';
+import { lightTheme, Theme } from '../theme/theme';
 import { MOBILE_MODELS } from '../engine/deviceProfiler';
 import type { OnDeviceModel, DeviceMemoryProfile } from '../types';
+import { Icon } from './common/Icon';
 
 interface ModelSelectorModalProps {
   visible: boolean;
@@ -26,7 +27,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   activeModel,
   profile,
   onSelectModel,
-  theme = darkTheme,
+  theme = lightTheme,
 }) => {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -49,7 +50,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               onPress={onClose}
               style={[styles.closeButton, { backgroundColor: theme.backgroundSecondary }]}
             >
-              <Text style={[styles.closeText, { color: theme.textSecondary }]}>✕</Text>
+              <Icon name="x" size={16} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -117,21 +118,27 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                   </View>
 
                   <View style={styles.statsRow}>
-                    <Text style={[styles.statChip, { backgroundColor: theme.card, color: theme.textSecondary }]}>
-                      📦 {model.sizeMb} MB
-                    </Text>
-                    <Text style={[styles.statChip, { backgroundColor: theme.card, color: theme.textSecondary }]}>
-                      🧠 ~{model.requiredRamMb} MB RAM
-                    </Text>
-                    <Text style={[styles.statChip, { backgroundColor: theme.card, color: theme.textSecondary }]}>
-                      ⚙️ {model.quantization}
-                    </Text>
+                    <View style={[styles.statChip, { backgroundColor: theme.backgroundSecondary }]}>
+                      <Icon name="package" size={11} color={theme.accent} style={{ marginRight: 4 }} />
+                      <Text style={[styles.statChipText, { color: theme.textSecondary }]}>{model.sizeMb} MB</Text>
+                    </View>
+                    <View style={[styles.statChip, { backgroundColor: theme.backgroundSecondary }]}>
+                      <Icon name="cpu" size={11} color={theme.accent} style={{ marginRight: 4 }} />
+                      <Text style={[styles.statChipText, { color: theme.textSecondary }]}>~{model.requiredRamMb} MB</Text>
+                    </View>
+                    <View style={[styles.statChip, { backgroundColor: theme.backgroundSecondary }]}>
+                      <Icon name="sliders" size={11} color={theme.textMuted} style={{ marginRight: 4 }} />
+                      <Text style={[styles.statChipText, { color: theme.textSecondary }]}>{model.quantization}</Text>
+                    </View>
                   </View>
 
                   {!canRun && (
-                    <Text style={[styles.disabledWarning, { color: theme.warning }]}>
-                      ⚠️ Requires 6GB+ RAM. Your device has {profile.totalRamMb} MB RAM.
-                    </Text>
+                    <View style={styles.warningRow}>
+                      <Icon name="alert-triangle" size={12} color={theme.warning} style={{ marginRight: 4 }} />
+                      <Text style={[styles.disabledWarning, { color: theme.warning }]}>
+                        Requires 6GB+ RAM. Your device has {profile.totalRamMb} MB RAM.
+                      </Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               );
@@ -146,7 +153,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -154,7 +161,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxHeight: '80%',
-    borderRadius: 22,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: 'hidden',
   },
@@ -166,7 +173,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
   },
   subtitle: {
@@ -180,12 +187,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
   modelCard: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
     padding: 14,
     marginBottom: 12,
@@ -203,7 +206,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   modelName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
   recommendedBadge: {
@@ -227,13 +230,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   tagline: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
   },
   radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -251,14 +254,22 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   statChip: {
-    fontSize: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    overflow: 'hidden',
+  },
+  statChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  warningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
   },
   disabledWarning: {
     fontSize: 11,
-    marginTop: 8,
   },
 });

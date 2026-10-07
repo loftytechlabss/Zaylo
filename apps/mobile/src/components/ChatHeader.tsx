@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import type { Theme } from '../theme/theme';
 import type { HybridMode, DesktopHost, OnDeviceModel } from '../types';
+import { Icon } from './common/Icon';
 
 interface ChatHeaderProps {
   theme: Theme;
@@ -38,18 +39,25 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     >
       {/* Back button */}
       <TouchableOpacity
-        style={[styles.backButton, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+        style={[
+          styles.backButton,
+          { backgroundColor: theme.card, borderColor: theme.cardBorder },
+          theme.shadows.sm,
+        ]}
         onPress={onBackToHome}
         activeOpacity={0.7}
       >
-        <Text style={[styles.backIcon, { color: theme.textPrimary }]}>←</Text>
+        <Icon name="arrow-left" size={18} color={theme.textPrimary} />
       </TouchableOpacity>
 
       {/* Model chip in center */}
       <TouchableOpacity
         style={[
           styles.modelChip,
-          { backgroundColor: theme.card, borderColor: theme.cardBorder },
+          {
+            backgroundColor: theme.card,
+            borderColor: theme.cardBorder,
+          },
           theme.shadows.sm,
         ]}
         onPress={onOpenModelModal}
@@ -58,7 +66,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <View
           style={[
             styles.statusDot,
-            { backgroundColor: isDesktop ? (desktopHost.isConnected ? theme.success : theme.danger) : theme.cyan },
+            {
+              backgroundColor: isDesktop
+                ? desktopHost.isConnected
+                  ? theme.success
+                  : theme.danger
+                : theme.accent,
+            },
           ]}
         />
         <Text style={[styles.modelName, { color: theme.textPrimary }]} numberOfLines={1}>
@@ -68,25 +82,37 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               : 'Desktop Host (Offline)'
             : activeLocalModel.name}
         </Text>
-        <Text style={[styles.chevron, { color: theme.textMuted }]}>▾</Text>
+        <Icon name="chevron-down" size={14} color={theme.textMuted} />
       </TouchableOpacity>
 
       {/* Right actions: Clear chat & Theme switcher */}
       <View style={styles.rightActions}>
         <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+          style={[
+            styles.actionBtn,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            theme.shadows.sm,
+          ]}
           onPress={onClearChat}
           activeOpacity={0.7}
         >
-          <Text style={{ fontSize: 14 }}>🗑️</Text>
+          <Icon name="trash-2" size={15} color={theme.textMuted} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+          style={[
+            styles.actionBtn,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            theme.shadows.sm,
+          ]}
           onPress={onToggleTheme}
           activeOpacity={0.7}
         >
-          <Text style={{ fontSize: 14 }}>{theme.isDark ? '☀️' : '🌙'}</Text>
+          <Icon
+            name={theme.isDark ? 'sun' : 'moon'}
+            size={15}
+            color={theme.accent}
+          />
         </TouchableOpacity>
       </View>
     </View>
@@ -110,10 +136,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backIcon: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
   modelChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -132,9 +154,6 @@ const styles = StyleSheet.create({
   modelName: {
     fontSize: 12,
     fontWeight: '700',
-  },
-  chevron: {
-    fontSize: 12,
   },
   rightActions: {
     flexDirection: 'row',

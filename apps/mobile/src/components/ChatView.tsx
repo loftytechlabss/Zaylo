@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import type { Theme } from '../theme/theme';
 import type { ChatMessage, HybridMode } from '../types';
+import { ZLogo } from './common/ZLogo';
+import { Icon } from './common/Icon';
 
 interface ChatViewProps {
   theme: Theme;
@@ -18,11 +20,16 @@ interface ChatViewProps {
   onSelectPromptSuggestion: (prompt: string) => void;
 }
 
-const CHAT_SUGGESTIONS = [
-  '⚡ Test on-device memory paging latency',
-  '🔒 Explain zero-cloud private inference',
-  '💻 Write an async LRU cache in TypeScript',
-  '📄 Summarize technical architecture',
+interface ChatSuggestion {
+  iconName: string;
+  text: string;
+}
+
+const CHAT_SUGGESTIONS: ChatSuggestion[] = [
+  { iconName: 'code', text: 'Help me refactor a function for performance' },
+  { iconName: 'terminal', text: 'Explain the difference between TCP and UDP' },
+  { iconName: 'database', text: 'How do database indexes improve query speed?' },
+  { iconName: 'file-text', text: 'Draft a clean technical release note' },
 ];
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -48,40 +55,69 @@ export const ChatView: React.FC<ChatViewProps> = ({
         <View
           style={[
             styles.emptyHeroCard,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            theme.shadows.md,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            },
+            theme.shadows.sm,
           ]}
         >
-          <View style={[styles.emptyIconBox, { backgroundColor: theme.accentLight }]}>
-            <Text style={{ fontSize: 24 }}>💬</Text>
+          <View style={styles.emptyLogoWrapper}>
+            <ZLogo
+              size={36}
+              variant={theme.isDark ? 'white' : 'dark'}
+              withContainer
+              containerBg={theme.isDark ? '#1a1d26' : '#f1f5f9'}
+              containerStyle={{
+                borderWidth: 1,
+                borderColor: theme.cardBorder,
+                marginBottom: 12,
+              }}
+            />
           </View>
           <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
-            {activeMode === 'on_device' ? 'Local Neural Session' : 'Desktop Host Session'}
+            {activeMode === 'on_device'
+              ? 'Local Chat Session'
+              : 'Desktop Host Session'}
           </Text>
           <Text style={[styles.emptySubtitle, { color: theme.textMuted }]}>
             {activeMode === 'on_device'
-              ? 'Zero-cloud execution via kernel virtual memory paging.'
-              : 'Streaming directly from your Zaylo Desktop Host over local LAN.'}
+              ? 'Execute inference directly on your device with local model weights.'
+              : 'Streaming directly from your Zaylo Desktop Host gateway on port 8080.'}
           </Text>
         </View>
 
         <View style={styles.suggestionsWrapper}>
           <Text style={[styles.suggestionsLabel, { color: theme.textMuted }]}>
-            QUICK PROMPTS
+            SUGGESTIONS
           </Text>
-          {CHAT_SUGGESTIONS.map((suggestion, idx) => (
+          {CHAT_SUGGESTIONS.map((item, idx) => (
             <TouchableOpacity
               key={idx}
               style={[
                 styles.suggestionChip,
-                { backgroundColor: theme.card, borderColor: theme.cardBorder },
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                },
                 theme.shadows.sm,
               ]}
-              onPress={() => onSelectPromptSuggestion(suggestion)}
+              onPress={() => onSelectPromptSuggestion(item.text)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.suggestionText, { color: theme.textPrimary }]}>
-                {suggestion}
+              <View
+                style={[
+                  styles.suggestionIconBox,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+              >
+                <Icon name={item.iconName} size={15} color={theme.accent} />
+              </View>
+              <Text
+                style={[styles.suggestionText, { color: theme.textPrimary }]}
+                numberOfLines={2}
+              >
+                {item.text}
               </Text>
             </TouchableOpacity>
           ))}
@@ -108,17 +144,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
               isUser ? styles.userRow : styles.assistantRow,
             ]}
           >
-            {/* Optional Attached Media Preview */}
             {message.imageUri && (
               <Image source={{ uri: message.imageUri }} style={styles.attachedImage} />
             )}
 
-            {/* Bubble */}
             <View
               style={[
                 styles.bubble,
                 isUser
-                  ? [styles.userBubble, { backgroundColor: theme.userBubble }, theme.shadows.sm]
+                  ? [
+                      styles.userBubble,
+                      {
+                        backgroundColor: theme.userBubble,
+                      },
+                      theme.shadows.sm,
+                    ]
                   : [
                       styles.assistantBubble,
                       {
@@ -137,18 +177,29 @@ export const ChatView: React.FC<ChatViewProps> = ({
               >
                 {message.content}
                 {message.isStreaming && (
-                  <Text style={{ color: theme.cyan, fontWeight: '800' }}> ▋</Text>
+                  <Text style={{ color: theme.accent, fontWeight: '800' }}> ▋</Text>
                 )}
               </Text>
             </View>
 
-            {/* Telemetry / Metrics footer */}
             {!isUser && message.metrics && (
-              <View style={[styles.metricsBadge, { backgroundColor: theme.cardElevated, borderColor: theme.cardBorder }]}>
+              <View
+                style={[
+                  styles.metricsBadge,
+                  {
+                    backgroundColor: theme.cardElevated,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+              >
+                <Icon
+                  name={message.metrics.backendUsed === 'on_device_paged' ? 'cpu' : 'monitor'}
+                  size={11}
+                  color={theme.accent}
+                  style={{ marginRight: 4 }}
+                />
                 <Text style={[styles.metricsText, { color: theme.textMuted }]}>
-                  {message.metrics.backendUsed === 'on_device_paged' ? '⚡ ' : '🖥️ '}
                   {message.metrics.tokensPerSec} tok/s • {message.metrics.ttftMs}ms TTFT
-                  {message.metrics.ramUsageMb ? ` • ~${message.metrics.ramUsageMb} MB RAM` : ''}
                 </Text>
               </View>
             )}
@@ -164,27 +215,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   emptyContentContainer: {
-    padding: 20,
-    paddingTop: 24,
+    padding: 16,
+    paddingTop: 18,
     paddingBottom: 40,
   },
   emptyHeroCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     padding: 20,
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  emptyIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+  emptyLogoWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     marginBottom: 6,
   },
@@ -194,24 +241,35 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   suggestionsWrapper: {
-    gap: 10,
+    gap: 8,
   },
   suggestionsLabel: {
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     marginBottom: 4,
     paddingHorizontal: 4,
   },
   suggestionChip: {
-    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  suggestionIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   suggestionText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+    flex: 1,
   },
   messagesContainer: {
     paddingHorizontal: 16,
@@ -219,7 +277,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   messageRow: {
-    marginBottom: 16,
+    marginBottom: 14,
     maxWidth: '86%',
   },
   userRow: {
@@ -235,7 +293,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   bubble: {
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -247,15 +305,17 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 4,
   },
   messageText: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 21,
   },
   metricsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 6,
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 7,
     borderWidth: 1,
   },
   metricsText: {
