@@ -10,7 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { lightTheme, Theme } from '../theme/theme';
-import type { DeviceMemoryProfile, MemoryPagingConfig } from '../types';
+import type { DeviceMemoryProfile, MemoryPagingConfig, DeviceHardwareTelemetry } from '../types';
 import { DeviceProfiler } from '../engine/deviceProfiler';
 import { Icon } from './common/Icon';
 
@@ -31,11 +31,25 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
   theme = lightTheme,
 }) => {
   const [activeTab, setActiveTab] = useState<TelemetryTab>('silicon');
-  const telemetry = useMemo(() => DeviceProfiler.getHardwareTelemetry(), []);
+  const [telemetry, setTelemetry] = useState<DeviceHardwareTelemetry>(() =>
+    DeviceProfiler.getHardwareTelemetry()
+  );
 
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let active = true;
+    if (visible) {
+      DeviceProfiler.getHardwareTelemetryAsync().then((data) => {
+        if (active) setTelemetry(data);
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [visible]);
 
   useEffect(() => {
     if (visible) {

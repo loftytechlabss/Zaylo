@@ -78,6 +78,18 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     ModelStorage.getInstalledModelIds()
   );
   const [downloadProgressMap, setDownloadProgressMap] = useState<Record<string, DownloadProgress>>({});
+  const [availableStorageGb, setAvailableStorageGb] = useState<number>(48.6);
+
+  // Probe live device flash storage quota
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then((est) => {
+        if (est.quota) {
+          setAvailableStorageGb(Number((est.quota / (1024 * 1024 * 1024)).toFixed(1)));
+        }
+      });
+    }
+  }, []);
 
   // Subscribe to installed models updates
   useEffect(() => {
@@ -257,7 +269,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                 Flash Storage Allocation
               </Text>
               <Text style={[styles.storageSubtitle, { color: theme.textMuted }]}>
-                {installedIds.length} Installed ({totalInstalledSizeMb} MB) • 48.6 GB Available
+                {installedIds.length} Installed ({totalInstalledSizeMb} MB) • {availableStorageGb} GB Available
               </Text>
             </View>
           </View>
