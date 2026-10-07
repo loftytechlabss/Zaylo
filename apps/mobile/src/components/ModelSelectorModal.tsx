@@ -15,7 +15,7 @@ import { Icon } from './common/Icon';
 interface ModelSelectorModalProps {
   visible: boolean;
   onClose: () => void;
-  activeModel: OnDeviceModel;
+  activeModel: OnDeviceModel | null;
   profile: DeviceMemoryProfile;
   onSelectModel: (model: OnDeviceModel) => void;
   theme?: Theme;
@@ -56,7 +56,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16 }}>
             {MOBILE_MODELS.map((model) => {
-              const isSelected = model.id === activeModel.id;
+              const isSelected = activeModel ? model.id === activeModel.id : false;
               const isRecommended = model.id === profile.recommendedModelId;
               const is3B = model.id.includes('3b');
               const canRun = is3B ? profile.canRun3B : true;

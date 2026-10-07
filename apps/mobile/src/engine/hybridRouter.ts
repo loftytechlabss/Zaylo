@@ -13,7 +13,7 @@ export class HybridRouter {
   constructor(
     private getMode: () => HybridMode,
     private getDesktopHost: () => DesktopHost,
-    private getOnDeviceModel: () => OnDeviceModel,
+    private getOnDeviceModel: () => OnDeviceModel | null,
     private getPagingConfig: () => MemoryPagingConfig
   ) {}
 
@@ -45,6 +45,9 @@ export class HybridRouter {
       );
     } else {
       // Route to On-Device Paged Engine
+      if (!localModel) {
+        throw new Error('No on-device model loaded. Please choose and download a model from the Model Library first.');
+      }
       await OnDeviceEngine.loadModel(localModel, pagingConfig);
       return OnDeviceEngine.generateCompletion(
         messages,

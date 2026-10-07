@@ -8,7 +8,7 @@ interface ChatHeaderProps {
   theme: Theme;
   mode: HybridMode;
   desktopHost: DesktopHost;
-  activeLocalModel: OnDeviceModel;
+  activeLocalModel: OnDeviceModel | null;
   onBackToHome: () => void;
   onOpenModelModal: () => void;
   onClearChat: () => void;
@@ -26,6 +26,22 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onToggleTheme,
 }) => {
   const isDesktop = mode === 'desktop';
+
+  const modelLabel = isDesktop
+    ? desktopHost.isConnected
+      ? desktopHost.activeModelName || 'Desktop Model'
+      : 'Desktop Host (Offline)'
+    : activeLocalModel
+    ? activeLocalModel.name
+    : 'No Model Selected';
+
+  const dotColor = isDesktop
+    ? desktopHost.isConnected
+      ? theme.success
+      : theme.danger
+    : activeLocalModel
+    ? theme.success
+    : theme.warning;
 
   return (
     <View
@@ -66,21 +82,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <View
           style={[
             styles.statusDot,
-            {
-              backgroundColor: isDesktop
-                ? desktopHost.isConnected
-                  ? theme.success
-                  : theme.danger
-                : theme.accent,
-            },
+            { backgroundColor: dotColor },
           ]}
         />
         <Text style={[styles.modelName, { color: theme.textPrimary }]} numberOfLines={1}>
-          {isDesktop
-            ? desktopHost.isConnected
-              ? desktopHost.activeModelName || 'Desktop Model'
-              : 'Desktop Host (Offline)'
-            : activeLocalModel.name}
+          {modelLabel}
         </Text>
         <Icon name="chevron-down" size={14} color={theme.textMuted} />
       </TouchableOpacity>
@@ -124,14 +130,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderBottomWidth: 1,
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -141,15 +147,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 9,
+    borderRadius: 22,
     borderWidth: 1,
-    maxWidth: '56%',
+    maxWidth: '58%',
   },
   statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   modelName: {
     fontSize: 12,

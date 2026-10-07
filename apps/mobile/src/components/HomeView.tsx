@@ -24,7 +24,7 @@ interface HomeViewProps {
   mode: HybridMode;
   onToggleMode: (newMode: HybridMode) => void;
   desktopHost: DesktopHost;
-  activeLocalModel: OnDeviceModel;
+  activeLocalModel: OnDeviceModel | null;
   pagingConfig: MemoryPagingConfig;
   profile: DeviceMemoryProfile;
   onOpenChat: (initialPrompt?: string) => void;
@@ -33,8 +33,6 @@ interface HomeViewProps {
   onOpenMemoryModal: () => void;
   onToggleTheme: () => void;
 }
-
-type WorkspaceFilter = 'overview' | 'on_device' | 'desktop' | 'models';
 
 export const HomeView: React.FC<HomeViewProps> = ({
   theme,
@@ -48,18 +46,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenMemoryModal,
   onToggleTheme,
 }) => {
-  const [activeFilter, setActiveFilter] = useState<WorkspaceFilter>('overview');
   const isDesktop = mode === 'desktop';
 
   // Local switch states matching reference UI
-  const [localEngineEnabled, setLocalEngineEnabled] = useState(true);
+  const [localEngineEnabled, setLocalEngineEnabled] = useState(!!activeLocalModel);
   const [desktopSyncEnabled, setDesktopSyncEnabled] = useState(desktopHost.isConnected);
   const [autoOffloadEnabled, setAutoOffloadEnabled] = useState(true);
   const [telemetryEnabled, setTelemetryEnabled] = useState(true);
 
   const handleToggleLocalSwitch = (val: boolean) => {
     setLocalEngineEnabled(val);
-    if (val) onToggleMode('on_device');
+    if (val) {
+      if (activeLocalModel) {
+        onToggleMode('on_device');
+      } else {
+        onOpenModelModal();
+      }
+    }
   };
 
   const handleToggleDesktopSwitch = (val: boolean) => {
@@ -78,10 +81,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* 1. Header: "Welcome Home, Alex" Style */}
+      {/* 1. Header: Clean title with Zaylo logo toggle */}
       <View style={styles.headerRow}>
         <View>
-          <Text style={[styles.welcomeGreeting, { color: theme.textPrimary }]}>
+          <Text style={[styles.welcomeGreeting, { color: theme.textSecondary }]}>
             Welcome to
           </Text>
           <Text style={[styles.welcomeName, { color: theme.textPrimary }]}>
@@ -110,80 +113,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </View>
       </View>
 
-      {/* 2. Workspace Filter Pills (Matching "Rooms" in Reference UI) */}
-      <View style={styles.filterSection}>
-        <Text style={[styles.sectionTitleLabel, { color: theme.textMuted }]}>
-          Workspace
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {[
-            { id: 'overview', label: 'All Engines', icon: 'grid' },
-            { id: 'on_device', label: 'On-Device', icon: 'cpu' },
-            { id: 'desktop', label: 'Desktop Host', icon: 'monitor' },
-            { id: 'models', label: 'Model Library', icon: 'layers' },
-          ].map((item) => {
-            const isSelected = activeFilter === item.id;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.filterCard,
-                  isSelected
-                    ? [
-                        styles.filterCardActive,
-                        { backgroundColor: theme.floatingNav },
-                        theme.shadows.md,
-                      ]
-                    : [
-                        styles.filterCardInactive,
-                        { backgroundColor: theme.card, borderColor: theme.cardBorder },
-                        theme.shadows.sm,
-                      ],
-                ]}
-                onPress={() => {
-                  setActiveFilter(item.id as WorkspaceFilter);
-                  if (item.id === 'models') onOpenModelModal();
-                  else if (item.id === 'desktop') onToggleMode('desktop');
-                  else if (item.id === 'on_device') onToggleMode('on_device');
-                }}
-                activeOpacity={0.8}
-              >
-                <View
-                  style={[
-                    styles.filterIconCircle,
-                    isSelected
-                      ? { backgroundColor: 'rgba(255, 255, 255, 0.15)' }
-                      : { backgroundColor: theme.backgroundSecondary },
-                  ]}
-                >
-                  <Icon
-                    name={item.icon}
-                    size={16}
-                    color={isSelected ? '#ffffff' : theme.textPrimary}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.filterLabel,
-                    {
-                      color: isSelected ? '#ffffff' : theme.textPrimary,
-                      fontWeight: isSelected ? '700' : '600',
-                    },
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* 3. Smart Systems: 2x2 Pastel Cards Grid with Toggles (Matching Reference UI) */}
+      {/* 2. Smart Systems: 2x2 Pastel Cards Grid with Toggles (Matching Reference UI) */}
       <View style={styles.systemsSection}>
         <Text style={[styles.sectionTitleLabel, { color: theme.textMuted }]}>
           Inference Systems
@@ -211,7 +141,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <Icon name="cpu" size={20} color="#ffffff" />
               </View>
               <Switch
-                value={localEngineEnabled}
+                value={localEngineEnabled && !!activeLocalModel}
+                disabled={!activeLocalModel}
                 onValueChange={handleToggleLocalSwitch}
                 trackColor={{ false: '#cbd5e1', true: theme.pastels.blue.text }}
                 thumbColor="#ffffff"
@@ -229,8 +160,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <Text style={[styles.pastelCardTitle, { color: theme.textPrimary }]}>
                 Local LLM
               </Text>
-              <Text style={[styles.pastelCardSubtitle, { color: theme.pastels.blue.text }]}>
-                {activeLocalModel.name}
+              <Text
+                style={[
+                  styles.pastelCardSubtitle,
+                  { color: activeLocalModel ? theme.pastels.blue.text : theme.textMuted },
+                ]}
+                numberOfLines={1}
+              >
+                {activeLocalModel ? activeLocalModel.name : 'No Model Loaded • Tap to Select'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -513,36 +450,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 12,
-  },
-  filterSection: {
-    marginBottom: 24,
-  },
-  filterScroll: {
-    gap: 10,
-  },
-  filterCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
-  },
-  filterCardActive: {
-    transform: [{ scale: 1.02 }],
-  },
-  filterCardInactive: {
-    borderWidth: 1,
-  },
-  filterIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterLabel: {
-    fontSize: 13,
   },
   systemsSection: {
     marginBottom: 24,

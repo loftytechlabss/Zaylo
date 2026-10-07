@@ -23,7 +23,7 @@ export const ZAYLO_MODELS: ZayloModel[] = [
     sizeMb: 808,
     contextLength: 8192,
     downloadUrl: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
-    isInstalled: true,
+    isInstalled: false,
     capabilities: ['CHAT', 'TEXT_GENERATION'],
   },
   {
@@ -49,7 +49,7 @@ export const ZAYLO_MODELS: ZayloModel[] = [
     sizeMb: 491,
     contextLength: 4096,
     downloadUrl: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
-    isInstalled: true,
+    isInstalled: false,
     capabilities: ['CHAT', 'MULTILINGUAL'],
   },
   {
@@ -101,7 +101,7 @@ export const ZAYLO_MODELS: ZayloModel[] = [
     sizeMb: 144,
     contextLength: 2048,
     downloadUrl: 'https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q8_0.gguf',
-    isInstalled: true,
+    isInstalled: false,
     capabilities: ['TESTING', 'CHAT'],
   },
 ];

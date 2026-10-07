@@ -70,3 +70,54 @@ export interface ChatMessage {
   metrics?: MessageMetrics;
   isStreaming?: boolean;
 }
+
+export interface CpuCluster {
+  type: 'Performance' | 'Efficiency' | 'Prime';
+  count: number;
+  clockGhz: number;
+}
+
+export interface DeviceHardwareTelemetry {
+  socName: string;
+  cpuArchitecture: string;
+  cpuTotalCores: number;
+  cpuClusters: CpuCluster[];
+  cpuInstructionSets: string[];
+  gpuRenderer: string;
+  gpuComputeApi: string;
+  gpuTflopsFp16: number;
+  gpuSharedMemory: boolean;
+  npuName: string;
+  npuTopsInt8: number;
+  npuStatus: string;
+  npuPrecisionSupport: string[];
+  totalRamMb: number;
+  usedRamMb: number;
+  availableRamMb: number;
+  ramType: string;
+  ramBandwidthGbps: number;
+  virtualPagingActive: boolean;
+  pageSizeKb: number;
+  mmapSupport: string;
+  dirtyPageThresholdMb: number;
+  kvCacheCompression: string;
+  storageTotalGb: number;
+  storageAvailableGb: number;
+  storageType: string;
+  sequentialReadSpeedMbS: number;
+  osName: string;
+  kernelVersion: string;
+  thermalState: 'Nominal' | 'Fair' | 'Throttled';
+  batteryPercent: number;
+  batteryState: 'Charging' | 'Unplugged';
+}
+
+export interface DownloadProgress {
+  modelId: string;
+  downloadedMb: number;
+  totalMb: number;
+  percent: number;
+  speedMbS: number;
+  etaSeconds: number;
+  status: 'idle' | 'downloading' | 'completed' | 'paused' | 'error';
+}

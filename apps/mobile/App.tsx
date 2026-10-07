@@ -77,9 +77,7 @@ export default function App() {
     activeModelName: 'Llama-3.2-1B-Instruct-Q4_K_M',
   });
 
-  const [activeLocalModel, setActiveLocalModel] = useState<OnDeviceModel>(
-    MOBILE_MODELS.find((m) => m.id === initialProfile.recommendedModelId) || MOBILE_MODELS[2]
-  );
+  const [activeLocalModel, setActiveLocalModel] = useState<OnDeviceModel | null>(null);
 
   const [pagingConfig, setPagingConfig] = useState<MemoryPagingConfig>(
     initialProfile.pagingConfig
@@ -182,13 +180,15 @@ export default function App() {
     );
   };
 
-  const handleSelectModel = (model: OnDeviceModel) => {
+  const handleSelectModel = (model: OnDeviceModel | null) => {
     setActiveLocalModel(model);
-    const optimized = MobileMemoryPagingEngine.optimizePagingConfig(
-      model,
-      profile.availableRamMb
-    );
-    setPagingConfig(optimized);
+    if (model) {
+      const optimized = MobileMemoryPagingEngine.optimizePagingConfig(
+        model,
+        profile.availableRamMb
+      );
+      setPagingConfig(optimized);
+    }
   };
 
   const handleUpdatePagingConfig = (partial: Partial<MemoryPagingConfig>) => {
@@ -267,7 +267,9 @@ export default function App() {
               messages={messages}
               isStreaming={isStreaming}
               activeMode={mode}
+              activeLocalModel={activeLocalModel}
               onSelectPromptSuggestion={handleSendMessage}
+              onOpenModelModal={() => navigateToScreen('models')}
             />
 
             <MessageInput
@@ -284,14 +286,15 @@ export default function App() {
         )}
       </Animated.View>
 
-      {/* 5. Floating Island Bottom Navigation Bar (Matching Reference UI) */}
-      <View
-        style={[
-          styles.floatingNavBar,
-          { backgroundColor: theme.floatingNav },
-          theme.shadows.floating,
-        ]}
-      >
+      {/* 5. Floating Island Bottom Navigation Bar (Hidden during Chat for full screen spaciousness) */}
+      {activeScreen !== 'chat' && (
+        <View
+          style={[
+            styles.floatingNavBar,
+            { backgroundColor: theme.floatingNav },
+            theme.shadows.floating,
+          ]}
+        >
         <TouchableOpacity
           style={[
             styles.floatingTab,
@@ -329,21 +332,15 @@ export default function App() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[
-            styles.floatingTab,
-            activeScreen === 'chat' && styles.floatingTabActive,
-          ]}
+          style={styles.floatingTab}
           onPress={() => navigateToScreen('chat')}
           activeOpacity={0.8}
         >
           <Icon
             name="message-square"
             size={18}
-            color={activeScreen === 'chat' ? '#ffffff' : theme.floatingNavText}
+            color={theme.floatingNavText}
           />
-          {activeScreen === 'chat' && (
-            <Text style={styles.floatingTabActiveText}>Chat</Text>
-          )}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -362,6 +359,7 @@ export default function App() {
           <Icon name="activity" size={18} color={theme.floatingNavText} />
         </TouchableOpacity>
       </View>
+      )}
 
       {/* Modals with Theme Support */}
       <MemoryGaugeModal
@@ -405,7 +403,6 @@ const styles = StyleSheet.create({
   },
   chatScreenContainer: {
     flex: 1,
-    paddingBottom: 80, // Padding for floating nav island
   },
   floatingNavBar: {
     position: 'absolute',

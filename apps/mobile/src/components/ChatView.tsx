@@ -8,7 +8,7 @@ import {
   Image,
 } from 'react-native';
 import type { Theme } from '../theme/theme';
-import type { ChatMessage, HybridMode } from '../types';
+import type { ChatMessage, HybridMode, OnDeviceModel } from '../types';
 import { ZLogo } from './common/ZLogo';
 import { Icon } from './common/Icon';
 
@@ -17,7 +17,9 @@ interface ChatViewProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   activeMode: HybridMode;
+  activeLocalModel?: OnDeviceModel | null;
   onSelectPromptSuggestion: (prompt: string) => void;
+  onOpenModelModal?: () => void;
 }
 
 interface ChatSuggestion {
@@ -37,7 +39,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
   messages,
   isStreaming,
   activeMode,
+  activeLocalModel,
   onSelectPromptSuggestion,
+  onOpenModelModal,
 }) => {
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -59,7 +63,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
             },
-            theme.shadows.sm,
+            theme.shadows.md,
           ]}
         >
           <View style={styles.emptyLogoWrapper}>
@@ -71,20 +75,39 @@ export const ChatView: React.FC<ChatViewProps> = ({
               containerStyle={{
                 borderWidth: 1,
                 borderColor: theme.cardBorder,
-                marginBottom: 12,
+                marginBottom: 16,
               }}
             />
           </View>
           <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
             {activeMode === 'on_device'
-              ? 'Local Chat Session'
+              ? activeLocalModel
+                ? activeLocalModel.name
+                : 'Local Engine'
               : 'Desktop Host Session'}
           </Text>
           <Text style={[styles.emptySubtitle, { color: theme.textMuted }]}>
             {activeMode === 'on_device'
-              ? 'Execute inference directly on your device with local model weights.'
+              ? activeLocalModel
+                ? 'Zero-cloud execution on device hardware with kernel memory paging.'
+                : 'No model loaded yet. Choose and download a certified model to chat offline.'
               : 'Streaming directly from your Zaylo Desktop Host gateway on port 8080.'}
           </Text>
+
+          {activeMode === 'on_device' && !activeLocalModel && onOpenModelModal && (
+            <TouchableOpacity
+              style={[
+                styles.selectModelCta,
+                { backgroundColor: theme.floatingNav },
+                theme.shadows.sm,
+              ]}
+              onPress={onOpenModelModal}
+              activeOpacity={0.8}
+            >
+              <Icon name="layers" size={14} color="#ffffff" />
+              <Text style={styles.selectModelCtaText}>Choose & Load Model</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.suggestionsWrapper}>
@@ -119,6 +142,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               >
                 {item.text}
               </Text>
+              <Icon name="arrow-up-right" size={14} color={theme.textMuted} />
             </TouchableOpacity>
           ))}
         </View>
@@ -215,70 +239,88 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   emptyContentContainer: {
-    padding: 16,
-    paddingTop: 18,
+    padding: 20,
+    paddingTop: 24,
     paddingBottom: 40,
   },
   emptyHeroCard: {
-    borderRadius: 16,
+    borderRadius: 24,
     borderWidth: 1,
-    padding: 20,
+    padding: 24,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   emptyLogoWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '800',
-    marginBottom: 6,
+    marginBottom: 8,
+    letterSpacing: -0.3,
   },
   emptySubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 20,
+    maxWidth: 290,
+  },
+  selectModelCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 22,
+    marginTop: 18,
+  },
+  selectModelCtaText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   suggestionsWrapper: {
-    gap: 8,
+    gap: 10,
   },
   suggestionsLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.8,
-    marginBottom: 4,
+    marginBottom: 6,
     paddingHorizontal: 4,
   },
   suggestionChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
   suggestionIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   suggestionText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     flex: 1,
+    lineHeight: 18,
   },
   messagesContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 28,
   },
   messageRow: {
-    marginBottom: 14,
-    maxWidth: '86%',
+    marginBottom: 18,
+    maxWidth: '85%',
   },
   userRow: {
     alignSelf: 'flex-end',
@@ -287,35 +329,36 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   attachedImage: {
-    width: 180,
-    height: 120,
-    borderRadius: 12,
-    marginBottom: 6,
+    width: 200,
+    height: 130,
+    borderRadius: 16,
+    marginBottom: 8,
   },
   bubble: {
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
   },
   userBubble: {
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 6,
   },
   assistantBubble: {
-    borderWidth: 1,
-    borderBottomLeftRadius: 4,
+    borderWidth: 1.5,
+    borderBottomLeftRadius: 6,
   },
   messageText: {
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 15,
+    lineHeight: 22,
+    letterSpacing: -0.1,
   },
   metricsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 8,
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
     borderWidth: 1,
   },
   metricsText: {
