@@ -1,13 +1,13 @@
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  Modal, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ScrollView 
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
 } from 'react-native';
-import { colors } from '../theme/colors';
+import { darkTheme, Theme } from '../theme/theme';
 import type { DeviceMemoryProfile, MemoryPagingConfig } from '../types';
 
 interface MemoryGaugeModalProps {
@@ -16,6 +16,7 @@ interface MemoryGaugeModalProps {
   profile: DeviceMemoryProfile;
   pagingConfig: MemoryPagingConfig;
   onUpdatePagingConfig: (newConfig: Partial<MemoryPagingConfig>) => void;
+  theme?: Theme;
 }
 
 export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
@@ -23,7 +24,7 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
   onClose,
   profile,
   pagingConfig,
-  onUpdatePagingConfig,
+  theme = darkTheme,
 }) => {
   const ramUsagePercent = Math.min(
     100,
@@ -31,32 +32,38 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
   );
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.modalCard}>
+        <View
+          style={[
+            styles.modalCard,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            theme.shadows.lg,
+          ]}
+        >
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { borderBottomColor: theme.cardBorder }]}>
             <View>
-              <Text style={styles.title}>Memory & Paging Engine</Text>
-              <Text style={styles.subtitle}>Mobile RAM Guardian & 3B Paging Controller</Text>
+              <Text style={[styles.title, { color: theme.textPrimary }]}>Memory & Paging</Text>
+              <Text style={[styles.subtitle, { color: theme.textMuted }]}>
+                Mobile RAM Guardian & Paging Controller
+              </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Text style={styles.closeText}>✕</Text>
+            <TouchableOpacity
+              onPress={onClose}
+              style={[styles.closeButton, { backgroundColor: theme.backgroundSecondary }]}
+            >
+              <Text style={[styles.closeText, { color: theme.textSecondary }]}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 18 }}>
             {/* Device Tier Badge */}
-            <View style={styles.tierBanner}>
-              <View style={styles.tierDot} />
+            <View style={[styles.tierBanner, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
+              <View style={[styles.tierDot, { backgroundColor: theme.cyan }]} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.tierTitle}>{profile.tierLabel}</Text>
-                <Text style={styles.tierDescription}>
+                <Text style={[styles.tierTitle, { color: theme.textPrimary }]}>{profile.tierLabel}</Text>
+                <Text style={[styles.tierDescription, { color: theme.textMuted }]}>
                   {profile.deviceTier === 'tier_3_flagship'
                     ? 'Flagship hardware detected. 3B models run smoothly with mmap & quantized KV.'
                     : profile.deviceTier === 'tier_2_balanced'
@@ -67,111 +74,81 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
             </View>
 
             {/* Visual RAM Allocation Meter */}
-            <View style={styles.gaugeSection}>
+            <View style={[styles.gaugeSection, { backgroundColor: theme.cardElevated, borderColor: theme.cardBorder }]}>
               <View style={styles.gaugeHeader}>
-                <Text style={styles.gaugeLabel}>RAM ALLOCATION</Text>
-                <Text style={styles.gaugeValue}>
+                <Text style={[styles.gaugeLabel, { color: theme.textMuted }]}>RAM ALLOCATION</Text>
+                <Text style={[styles.gaugeValue, { color: theme.cyan }]}>
                   {pagingConfig.estimatedFootprintMb} MB / {profile.totalRamMb} MB ({ramUsagePercent}%)
                 </Text>
               </View>
 
-              <View style={styles.progressBarTrack}>
-                <View 
+              <View style={[styles.progressBarTrack, { backgroundColor: theme.cardBorder }]}>
+                <View
                   style={[
-                    styles.progressBarFill, 
-                    { width: `${ramUsagePercent}%` },
-                    ramUsagePercent > 70 ? styles.progressWarning : styles.progressNormal
-                  ]} 
+                    styles.progressBarFill,
+                    {
+                      width: `${ramUsagePercent}%`,
+                      backgroundColor: ramUsagePercent > 70 ? theme.warning : theme.cyan,
+                    },
+                  ]}
                 />
               </View>
 
               <View style={styles.ramLegend}>
-                <Text style={styles.legendText}>• Available RAM: {profile.availableRamMb} MB</Text>
-                <Text style={styles.legendText}>• Safe LLM Budget: {pagingConfig.ramBudgetMb} MB</Text>
-              </View>
-            </View>
-
-            {/* Core Paging Feature Checklist */}
-            <Text style={styles.sectionHeading}>ACTIVE MEMORY PAGING SAFEGUARDS</Text>
-
-            <View style={styles.featureItem}>
-              <View style={styles.checkPill}><Text style={styles.checkText}>✓</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.featureTitle}>Kernel Virtual Memory Paging (mmap)</Text>
-                <Text style={styles.featureDesc}>
-                  Weights remain in flash storage; the Linux/Android kernel only pages active tensors into physical RAM. Eliminates process termination by Android LowMemoryKiller.
+                <Text style={[styles.legendText, { color: theme.textSecondary }]}>
+                  • Available RAM: {profile.availableRamMb} MB
+                </Text>
+                <Text style={[styles.legendText, { color: theme.textSecondary }]}>
+                  • Safe LLM Budget: {pagingConfig.ramBudgetMb} MB
                 </Text>
               </View>
             </View>
 
-            <View style={styles.featureItem}>
-              <View style={styles.checkPill}><Text style={styles.checkText}>✓</Text></View>
+            {/* Safeguards */}
+            <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
+              ACTIVE MEMORY SAFEGUARDS
+            </Text>
+
+            <View style={[styles.featureItem, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
+              <View style={[styles.checkPill, { backgroundColor: theme.successLight }]}>
+                <Text style={[styles.checkText, { color: theme.success }]}>✓</Text>
+              </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.featureTitle}>
+                <Text style={[styles.featureTitle, { color: theme.textPrimary }]}>
+                  Kernel Virtual Memory Paging (mmap)
+                </Text>
+                <Text style={[styles.featureDesc, { color: theme.textMuted }]}>
+                  Weights stay in flash storage; the kernel pages active layers into RAM on demand.
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.featureItem, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
+              <View style={[styles.checkPill, { backgroundColor: theme.successLight }]}>
+                <Text style={[styles.checkText, { color: theme.success }]}>✓</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.featureTitle, { color: theme.textPrimary }]}>
                   Quantized KV Cache ({pagingConfig.kvCacheQuant.toUpperCase()})
                 </Text>
-                <Text style={styles.featureDesc}>
-                  Compresses attention memory from 16-bit to 8-bit/4-bit. Cuts conversation RAM growth by 50%–75%.
+                <Text style={[styles.featureDesc, { color: theme.textMuted }]}>
+                  Cuts conversation context memory growth by 50%–75%.
                 </Text>
               </View>
             </View>
 
-            <View style={styles.featureItem}>
-              <View style={styles.checkPill}><Text style={styles.checkText}>✓</Text></View>
+            <View style={[styles.featureItem, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
+              <View style={[styles.checkPill, { backgroundColor: theme.successLight }]}>
+                <Text style={[styles.checkText, { color: theme.success }]}>✓</Text>
+              </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.featureTitle}>Micro-Batched Ingestion (n_ubatch: {pagingConfig.nUbatch})</Text>
-                <Text style={styles.featureDesc}>
-                  Evaluates prompt tokens in small 128-token pages, flattening peak RAM spikes.
+                <Text style={[styles.featureTitle, { color: theme.textPrimary }]}>
+                  Thermal Throttling Protection
+                </Text>
+                <Text style={[styles.featureDesc, { color: theme.textMuted }]}>
+                  Dynamically paces token generation to prevent battery drain and CPU heating.
                 </Text>
               </View>
-            </View>
-
-            <View style={styles.featureItem}>
-              <View style={styles.checkPill}><Text style={styles.checkText}>✓</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.featureTitle}>
-                  Sliding-Window Context Paging ({pagingConfig.contextWindow} tokens)
-                </Text>
-                <Text style={styles.featureDesc}>
-                  Prunes older historical turns dynamically to keep working set strictly bounded.
-                </Text>
-              </View>
-            </View>
-
-            {/* Quick Toggle Controls */}
-            <Text style={styles.sectionHeading}>PAGING PROFILE PRESETS</Text>
-            <View style={styles.presetRow}>
-              <TouchableOpacity
-                style={[
-                  styles.presetButton,
-                  pagingConfig.contextWindow === 1024 && styles.presetButtonActive,
-                ]}
-                onPress={() =>
-                  onUpdatePagingConfig({
-                    contextWindow: 1024,
-                    kvCacheQuant: 'q4_0',
-                    estimatedFootprintMb: 850,
-                  })
-                }
-              >
-                <Text style={styles.presetText}>Eco Paged (1K Ctx)</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.presetButton,
-                  pagingConfig.contextWindow === 2048 && styles.presetButtonActive,
-                ]}
-                onPress={() =>
-                  onUpdatePagingConfig({
-                    contextWindow: 2048,
-                    kvCacheQuant: 'q8_0',
-                    estimatedFootprintMb: 1200,
-                  })
-                }
-              >
-                <Text style={styles.presetText}>Standard (2K Ctx)</Text>
-              </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
@@ -183,191 +160,140 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    padding: 20,
   },
   modalCard: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
     width: '100%',
-    maxHeight: '85%',
-    padding: 20,
+    maxHeight: '82%',
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
   },
   title: {
     fontSize: 18,
     fontWeight: '800',
-    color: colors.textPrimary,
   },
   subtitle: {
     fontSize: 12,
-    color: colors.textMuted,
     marginTop: 2,
   },
   closeButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.cardElevated,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeText: {
-    color: colors.textSecondary,
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: '700',
   },
   tierBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: colors.cardElevated,
-    padding: 12,
-    borderRadius: 12,
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.cyan,
     marginBottom: 16,
   },
   tierDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.cyan,
-    marginTop: 5,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 4,
   },
   tierTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: colors.cyan,
     marginBottom: 2,
   },
   tierDescription: {
     fontSize: 11,
-    color: colors.textSecondary,
     lineHeight: 16,
   },
   gaugeSection: {
-    backgroundColor: colors.cardElevated,
     padding: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    marginBottom: 18,
+    marginBottom: 20,
   },
   gaugeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
   gaugeLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: colors.textMuted,
-    letterSpacing: 1,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   gaugeValue: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.textPrimary,
-    fontFamily: 'monospace',
+    fontVariant: ['tabular-nums'],
   },
   progressBarTrack: {
     height: 8,
-    backgroundColor: colors.inputBg,
     borderRadius: 4,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   progressBarFill: {
     height: '100%',
     borderRadius: 4,
   },
-  progressNormal: {
-    backgroundColor: colors.cyan,
-  },
-  progressWarning: {
-    backgroundColor: colors.warning,
-  },
   ramLegend: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 4,
   },
   legendText: {
-    fontSize: 10,
-    color: colors.textMuted,
-    fontFamily: 'monospace',
+    fontSize: 11,
   },
   sectionHeading: {
     fontSize: 10,
-    fontWeight: '700',
-    color: colors.textMuted,
+    fontWeight: '800',
     letterSpacing: 1,
     marginBottom: 10,
-    marginTop: 4,
   },
   featureItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 12,
+    gap: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 10,
   },
   checkPill: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderWidth: 1,
-    borderColor: colors.success,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
+    marginTop: 1,
   },
   checkText: {
-    fontSize: 11,
-    color: colors.success,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
   },
   featureTitle: {
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    fontWeight: '700',
     marginBottom: 2,
   },
   featureDesc: {
     fontSize: 11,
-    color: colors.textMuted,
-    lineHeight: 16,
-  },
-  presetRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  presetButton: {
-    flex: 1,
-    backgroundColor: colors.cardElevated,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  presetButtonActive: {
-    borderColor: colors.cyan,
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
-  },
-  presetText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    lineHeight: 15,
   },
 });

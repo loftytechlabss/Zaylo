@@ -1,13 +1,13 @@
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  Modal, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ScrollView 
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
 } from 'react-native';
-import { colors } from '../theme/colors';
+import { darkTheme, Theme } from '../theme/theme';
 import { MOBILE_MODELS } from '../engine/deviceProfiler';
 import type { OnDeviceModel, DeviceMemoryProfile } from '../types';
 
@@ -17,6 +17,7 @@ interface ModelSelectorModalProps {
   activeModel: OnDeviceModel;
   profile: DeviceMemoryProfile;
   onSelectModel: (model: OnDeviceModel) => void;
+  theme?: Theme;
 }
 
 export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
@@ -25,22 +26,34 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   activeModel,
   profile,
   onSelectModel,
+  theme = darkTheme,
 }) => {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.modalCard}>
-          <View style={styles.header}>
+        <View
+          style={[
+            styles.modalCard,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            theme.shadows.lg,
+          ]}
+        >
+          <View style={[styles.header, { borderBottomColor: theme.cardBorder }]}>
             <View>
-              <Text style={styles.title}>On-Device Models</Text>
-              <Text style={styles.subtitle}>Select certified mobile-optimized LLM</Text>
+              <Text style={[styles.title, { color: theme.textPrimary }]}>On-Device Models</Text>
+              <Text style={[styles.subtitle, { color: theme.textMuted }]}>
+                Select certified mobile-optimized LLM
+              </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Text style={styles.closeText}>✕</Text>
+            <TouchableOpacity
+              onPress={onClose}
+              style={[styles.closeButton, { backgroundColor: theme.backgroundSecondary }]}
+            >
+              <Text style={[styles.closeText, { color: theme.textSecondary }]}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16 }}>
             {MOBILE_MODELS.map((model) => {
               const isSelected = model.id === activeModel.id;
               const isRecommended = model.id === profile.recommendedModelId;
@@ -52,8 +65,12 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                   key={model.id}
                   style={[
                     styles.modelCard,
-                    isSelected && styles.modelCardSelected,
-                    !canRun && styles.modelCardDisabled,
+                    {
+                      backgroundColor: isSelected ? theme.backgroundSecondary : theme.cardElevated,
+                      borderColor: isSelected ? theme.accent : theme.cardBorder,
+                    },
+                    !canRun && { opacity: 0.5 },
+                    theme.shadows.sm,
                   ]}
                   onPress={() => {
                     if (canRun) {
@@ -66,33 +83,53 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                   <View style={styles.cardTopRow}>
                     <View style={{ flex: 1 }}>
                       <View style={styles.titleRow}>
-                        <Text style={styles.modelName}>{model.name}</Text>
+                        <Text style={[styles.modelName, { color: theme.textPrimary }]}>
+                          {model.name}
+                        </Text>
                         {isRecommended && (
-                          <View style={styles.recommendedBadge}>
-                            <Text style={styles.recommendedText}>BEST FOR YOUR PHONE</Text>
+                          <View style={[styles.recommendedBadge, { backgroundColor: theme.accentLight }]}>
+                            <Text style={[styles.recommendedText, { color: theme.accent }]}>
+                              RECOMMENDED
+                            </Text>
                           </View>
                         )}
                         {is3B && (
-                          <View style={styles.pagedBadge}>
-                            <Text style={styles.pagedBadgeText}>PAGED MMAP</Text>
+                          <View style={[styles.pagedBadge, { backgroundColor: theme.cyanLight }]}>
+                            <Text style={[styles.pagedBadgeText, { color: theme.cyan }]}>
+                              PAGED MMAP
+                            </Text>
                           </View>
                         )}
                       </View>
-                      <Text style={styles.tagline}>{model.tagline}</Text>
+                      <Text style={[styles.tagline, { color: theme.textMuted }]}>
+                        {model.tagline}
+                      </Text>
                     </View>
-                    <View style={[styles.radio, isSelected && styles.radioActive]}>
+                    <View
+                      style={[
+                        styles.radio,
+                        { borderColor: isSelected ? theme.accent : theme.cardBorder },
+                        isSelected && { backgroundColor: theme.accent },
+                      ]}
+                    >
                       {isSelected && <View style={styles.radioInner} />}
                     </View>
                   </View>
 
                   <View style={styles.statsRow}>
-                    <Text style={styles.statChip}>📦 {model.sizeMb} MB</Text>
-                    <Text style={styles.statChip}>🧠 ~{model.requiredRamMb} MB RAM</Text>
-                    <Text style={styles.statChip}>⚙️ {model.quantization}</Text>
+                    <Text style={[styles.statChip, { backgroundColor: theme.card, color: theme.textSecondary }]}>
+                      📦 {model.sizeMb} MB
+                    </Text>
+                    <Text style={[styles.statChip, { backgroundColor: theme.card, color: theme.textSecondary }]}>
+                      🧠 ~{model.requiredRamMb} MB RAM
+                    </Text>
+                    <Text style={[styles.statChip, { backgroundColor: theme.card, color: theme.textSecondary }]}>
+                      ⚙️ {model.quantization}
+                    </Text>
                   </View>
 
                   {!canRun && (
-                    <Text style={styles.disabledWarning}>
+                    <Text style={[styles.disabledWarning, { color: theme.warning }]}>
                       ⚠️ Requires 6GB+ RAM. Your device has {profile.totalRamMb} MB RAM.
                     </Text>
                   )}
@@ -109,69 +146,54 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    padding: 20,
   },
   modalCard: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
     width: '100%',
-    maxHeight: '85%',
-    padding: 20,
+    maxHeight: '80%',
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
   },
   title: {
     fontSize: 18,
     fontWeight: '800',
-    color: colors.textPrimary,
   },
   subtitle: {
     fontSize: 12,
-    color: colors.textMuted,
     marginTop: 2,
   },
   closeButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.cardElevated,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeText: {
-    color: colors.textSecondary,
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: '700',
   },
   modelCard: {
-    backgroundColor: colors.cardElevated,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderRadius: 16,
+    borderWidth: 1.5,
     padding: 14,
-    marginBottom: 10,
-  },
-  modelCardSelected: {
-    borderColor: colors.cyan,
-    backgroundColor: 'rgba(6, 182, 212, 0.05)',
-  },
-  modelCardDisabled: {
-    opacity: 0.5,
+    marginBottom: 12,
   },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 8,
   },
   titleRow: {
     flexDirection: 'row',
@@ -183,77 +205,60 @@ const styles = StyleSheet.create({
   modelName: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.textPrimary,
   },
   recommendedBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.success,
   },
   recommendedText: {
     fontSize: 9,
-    fontWeight: '700',
-    color: colors.success,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   pagedBadge: {
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.cyan,
   },
   pagedBadgeText: {
     fontSize: 9,
-    fontWeight: '700',
-    color: colors.cyan,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   tagline: {
     fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 10,
+    lineHeight: 16,
   },
   radio: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: colors.cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
-  },
-  radioActive: {
-    borderColor: colors.cyan,
+    marginLeft: 10,
   },
   radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.cyan,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ffffff',
   },
   statsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    marginTop: 10,
   },
   statChip: {
-    fontSize: 10,
-    fontFamily: 'monospace',
-    color: colors.textMuted,
-    backgroundColor: colors.inputBg,
+    fontSize: 11,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+    overflow: 'hidden',
   },
   disabledWarning: {
     fontSize: 11,
-    color: colors.warning,
     marginTop: 8,
   },
 });

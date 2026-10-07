@@ -1,30 +1,32 @@
 import React, { useRef, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Image 
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
 } from 'react-native';
-import { colors } from '../theme/colors';
+import type { Theme } from '../theme/theme';
 import type { ChatMessage, HybridMode } from '../types';
 
 interface ChatViewProps {
+  theme: Theme;
   messages: ChatMessage[];
   isStreaming: boolean;
   activeMode: HybridMode;
   onSelectPromptSuggestion: (prompt: string) => void;
 }
 
-const PROMPT_SUGGESTIONS = [
-  '⚡ Test on-device 3B memory paging',
-  '📄 Summarize technical architecture',
-  '💻 Write an async LRU cache in TypeScript',
+const CHAT_SUGGESTIONS = [
+  '⚡ Test on-device memory paging latency',
   '🔒 Explain zero-cloud private inference',
+  '💻 Write an async LRU cache in TypeScript',
+  '📄 Summarize technical architecture',
 ];
 
 export const ChatView: React.FC<ChatViewProps> = ({
+  theme,
   messages,
   isStreaming,
   activeMode,
@@ -38,39 +40,61 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   if (messages.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <View style={styles.heroLogoContainer}>
-          <Text style={styles.heroLogoText}>Z</Text>
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.background }]}
+        contentContainerStyle={styles.emptyContentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <View
+          style={[
+            styles.emptyHeroCard,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            theme.shadows.md,
+          ]}
+        >
+          <View style={[styles.emptyIconBox, { backgroundColor: theme.accentLight }]}>
+            <Text style={{ fontSize: 24 }}>💬</Text>
+          </View>
+          <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
+            {activeMode === 'on_device' ? 'Local Neural Session' : 'Desktop Host Session'}
+          </Text>
+          <Text style={[styles.emptySubtitle, { color: theme.textMuted }]}>
+            {activeMode === 'on_device'
+              ? 'Zero-cloud execution via kernel virtual memory paging.'
+              : 'Streaming directly from your Zaylo Desktop Host over local LAN.'}
+          </Text>
         </View>
-        <Text style={styles.heroTitle}>Private Local AI</Text>
-        <Text style={styles.heroSubtitle}>
-          {activeMode === 'on_device'
-            ? 'Running locally with kernel virtual memory paging. Zero cloud servers.'
-            : 'Streaming directly from your Zaylo Desktop Host over local network.'}
-        </Text>
 
-        <View style={styles.suggestionsContainer}>
-          <Text style={styles.suggestionsHeader}>SUGGESTED PROMPTS</Text>
-          {PROMPT_SUGGESTIONS.map((suggestion, idx) => (
+        <View style={styles.suggestionsWrapper}>
+          <Text style={[styles.suggestionsLabel, { color: theme.textMuted }]}>
+            QUICK PROMPTS
+          </Text>
+          {CHAT_SUGGESTIONS.map((suggestion, idx) => (
             <TouchableOpacity
               key={idx}
-              style={styles.suggestionChip}
+              style={[
+                styles.suggestionChip,
+                { backgroundColor: theme.card, borderColor: theme.cardBorder },
+                theme.shadows.sm,
+              ]}
               onPress={() => onSelectPromptSuggestion(suggestion)}
               activeOpacity={0.7}
             >
-              <Text style={styles.suggestionText}>{suggestion}</Text>
+              <Text style={[styles.suggestionText, { color: theme.textPrimary }]}>
+                {suggestion}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
   return (
     <ScrollView
       ref={scrollViewRef}
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      style={[styles.container, { backgroundColor: theme.background }]}
+      contentContainerStyle={styles.messagesContainer}
       showsVerticalScrollIndicator={false}
     >
       {messages.map((message) => {
@@ -80,8 +104,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <View
             key={message.id}
             style={[
-              styles.messageWrapper,
-              isUser ? styles.userWrapper : styles.assistantWrapper,
+              styles.messageRow,
+              isUser ? styles.userRow : styles.assistantRow,
             ]}
           >
             {/* Optional Attached Media Preview */}
@@ -89,23 +113,39 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <Image source={{ uri: message.imageUri }} style={styles.attachedImage} />
             )}
 
-            {/* Bubble Container */}
+            {/* Bubble */}
             <View
               style={[
                 styles.bubble,
-                isUser ? styles.userBubble : styles.assistantBubble,
+                isUser
+                  ? [styles.userBubble, { backgroundColor: theme.userBubble }, theme.shadows.sm]
+                  : [
+                      styles.assistantBubble,
+                      {
+                        backgroundColor: theme.assistantBubble,
+                        borderColor: theme.assistantBorder,
+                      },
+                      theme.shadows.sm,
+                    ],
               ]}
             >
-              <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
+              <Text
+                style={[
+                  styles.messageText,
+                  { color: isUser ? theme.userText : theme.assistantText },
+                ]}
+              >
                 {message.content}
-                {message.isStreaming && <Text style={styles.cursor}> ▋</Text>}
+                {message.isStreaming && (
+                  <Text style={{ color: theme.cyan, fontWeight: '800' }}> ▋</Text>
+                )}
               </Text>
             </View>
 
-            {/* Telemetry / Metrics footer for Assistant responses */}
+            {/* Telemetry / Metrics footer */}
             {!isUser && message.metrics && (
-              <View style={styles.metricsBadge}>
-                <Text style={styles.metricsText}>
+              <View style={[styles.metricsBadge, { backgroundColor: theme.cardElevated, borderColor: theme.cardBorder }]}>
+                <Text style={[styles.metricsText, { color: theme.textMuted }]}>
                   {message.metrics.backendUsed === 'on_device_paged' ? '⚡ ' : '🖥️ '}
                   {message.metrics.tokensPerSec} tok/s • {message.metrics.ttftMs}ms TTFT
                   {message.metrics.ramUsageMb ? ` • ~${message.metrics.ramUsageMb} MB RAM` : ''}
@@ -122,111 +162,71 @@ export const ChatView: React.FC<ChatViewProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 24,
+  emptyContentContainer: {
+    padding: 20,
+    paddingTop: 24,
+    paddingBottom: 40,
   },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    backgroundColor: colors.background,
-  },
-  heroLogoContainer: {
-    width: 64,
-    height: 64,
+  emptyHeroCard: {
     borderRadius: 20,
-    backgroundColor: colors.cardElevated,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  heroLogoText: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: colors.cyan,
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6,
   },
-  heroTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  heroSubtitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
+  emptySubtitle: {
+    fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 28,
   },
-  suggestionsContainer: {
-    width: '100%',
-    gap: 8,
+  suggestionsWrapper: {
+    gap: 10,
   },
-  suggestionsHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
+  suggestionsLabel: {
+    fontSize: 10,
+    fontWeight: '800',
     letterSpacing: 1,
     marginBottom: 4,
+    paddingHorizontal: 4,
   },
   suggestionChip: {
-    backgroundColor: colors.card,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   suggestionText: {
     fontSize: 13,
-    color: colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  messageWrapper: {
+  messagesContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  messageRow: {
     marginBottom: 16,
-    maxWidth: '88%',
+    maxWidth: '86%',
   },
-  userWrapper: {
+  userRow: {
     alignSelf: 'flex-end',
   },
-  assistantWrapper: {
+  assistantRow: {
     alignSelf: 'flex-start',
-    maxWidth: '96%',
-  },
-  bubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 16,
-  },
-  userBubble: {
-    backgroundColor: colors.userBubble,
-    borderBottomRightRadius: 4,
-  },
-  assistantBubble: {
-    backgroundColor: colors.assistantBubble,
-    borderWidth: 1,
-    borderColor: colors.assistantBorder,
-    borderBottomLeftRadius: 4,
-  },
-  messageText: {
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  userText: {
-    color: colors.textPrimary,
-  },
-  assistantText: {
-    color: '#e4e4e7',
-  },
-  cursor: {
-    color: colors.cyan,
-    fontWeight: '700',
   },
   attachedImage: {
     width: 180,
@@ -234,16 +234,33 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 6,
   },
+  bubble: {
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  userBubble: {
+    borderBottomRightRadius: 4,
+  },
+  assistantBubble: {
+    borderWidth: 1,
+    borderBottomLeftRadius: 4,
+  },
+  messageText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
   metricsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    marginLeft: 4,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
   },
   metricsText: {
     fontSize: 10,
-    color: colors.textMuted,
     fontFamily: 'monospace',
-    letterSpacing: 0.2,
+    fontWeight: '600',
   },
 });

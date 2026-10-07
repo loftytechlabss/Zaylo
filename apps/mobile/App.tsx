@@ -1,35 +1,54 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { 
-  SafeAreaView, 
-  StyleSheet, 
-  View, 
-  StatusBar 
+import {
+  SafeAreaView,
+  StyleSheet,
+  View,
+  StatusBar,
+  TouchableOpacity,
+  Text,
+  Platform,
 } from 'react-native';
-import { colors } from './src/theme/colors';
-import type { 
-  HybridMode, 
-  ChatMessage, 
-  DesktopHost, 
-  OnDeviceModel, 
-  MemoryPagingConfig, 
-  DeviceMemoryProfile 
+import { darkTheme, lightTheme, Theme } from './src/theme/theme';
+import type {
+  HybridMode,
+  ChatMessage,
+  DesktopHost,
+  OnDeviceModel,
+  MemoryPagingConfig,
+  DeviceMemoryProfile,
 } from './src/types';
 import { DeviceProfiler, MOBILE_MODELS } from './src/engine/deviceProfiler';
 import { MobileMemoryPagingEngine } from './src/engine/memoryPaging';
 import { HybridRouter } from './src/engine/hybridRouter';
-import { Header } from './src/components/Header';
+import { HomeView } from './src/components/HomeView';
+import { ChatHeader } from './src/components/ChatHeader';
 import { ChatView } from './src/components/ChatView';
 import { MessageInput } from './src/components/MessageInput';
 import { MemoryGaugeModal } from './src/components/MemoryGaugeModal';
 import { PairingModal } from './src/components/PairingModal';
 import { ModelSelectorModal } from './src/components/ModelSelectorModal';
 
+type ActiveScreen = 'home' | 'chat';
+
 export default function App() {
+  // Theme state: dark vs light
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+  const theme: Theme = useMemo(
+    () => (themeMode === 'dark' ? darkTheme : lightTheme),
+    [themeMode]
+  );
+  const toggleTheme = () => {
+    setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  // Screen Navigation state (Defaults to Home Hub instead of raw chatbot!)
+  const [activeScreen, setActiveScreen] = useState<ActiveScreen>('home');
+
   // 1. Initial Device & Paging Profiling
   const initialProfile = useMemo(() => DeviceProfiler.profileDevice(), []);
-  const [profile, setProfile] = useState<DeviceMemoryProfile>(initialProfile);
+  const [profile] = useState<DeviceMemoryProfile>(initialProfile);
 
-  // 2. Active State
+  // 2. Active Hybrid Mode & Chat State
   const [mode, setMode] = useState<HybridMode>('on_device');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -70,6 +89,11 @@ export default function App() {
 
   // 7. Message Handlers
   const handleSendMessage = async (text: string) => {
+    // If sent from Home, ensure we switch to chat screen
+    if (activeScreen !== 'chat') {
+      setActiveScreen('chat');
+    }
+
     const userMessage: ChatMessage = {
       id: `msg_${Date.now()}_u`,
       role: 'user',
@@ -134,7 +158,7 @@ export default function App() {
       );
 
       cancelStreamRef.current = cancelFn;
-    } catch (err: any) {
+    } catch {
       setIsStreaming(false);
     }
   };
@@ -163,52 +187,167 @@ export default function App() {
     setPagingConfig((prev) => ({ ...prev, ...partial }));
   };
 
+  const handleOpenChatWithPrompt = (initialPrompt?: string) => {
+    setActiveScreen('chat');
+    if (initialPrompt) {
+      setTimeout(() => handleSendMessage(initialPrompt), 50);
+    }
+  };
+
+  const handleClearChat = () => {
+    if (cancelStreamRef.current) {
+      cancelStreamRef.current();
+      cancelStreamRef.current = null;
+    }
+    setIsStreaming(false);
+    setMessages([]);
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-
-      {/* Header with Hybrid Mode Switcher & Memory Pill */}
-      <Header
-        mode={mode}
-        onToggleMode={setMode}
-        desktopHost={desktopHost}
-        activeLocalModel={activeLocalModel}
-        pagingConfig={pagingConfig}
-        onOpenMemoryModal={() => setMemoryModalVisible(true)}
-        onOpenPairingModal={() => setPairingModalVisible(true)}
-        onOpenModelModal={() => setModelModalVisible(true)}
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar
+        barStyle={theme.isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.background}
       />
 
-      {/* Message Stream View */}
-      <ChatView
-        messages={messages}
-        isStreaming={isStreaming}
-        activeMode={mode}
-        onSelectPromptSuggestion={handleSendMessage}
-      />
+      {/* Screen Router */}
+      {activeScreen === 'home' ? (
+        <HomeView
+          theme={theme}
+          mode={mode}
+          onToggleMode={setMode}
+          desktopHost={desktopHost}
+          activeLocalModel={activeLocalModel}
+          pagingConfig={pagingConfig}
+          profile={profile}
+          onOpenChat={handleOpenChatWithPrompt}
+          onOpenModelModal={() => setModelModalVisible(true)}
+          onOpenPairingModal={() => setPairingModalVisible(true)}
+          onOpenMemoryModal={() => setMemoryModalVisible(true)}
+          onToggleTheme={toggleTheme}
+        />
+      ) : (
+        <View style={styles.chatScreenContainer}>
+          {/* Chat Dedicated Top Header */}
+          <ChatHeader
+            theme={theme}
+            mode={mode}
+            desktopHost={desktopHost}
+            activeLocalModel={activeLocalModel}
+            onBackToHome={() => setActiveScreen('home')}
+            onOpenModelModal={() => setModelModalVisible(true)}
+            onClearChat={handleClearChat}
+            onToggleTheme={toggleTheme}
+          />
 
-      {/* Floating Bottom Input Bar */}
-      <MessageInput
-        onSendMessage={handleSendMessage}
-        onStopGeneration={handleStopGeneration}
-        isStreaming={isStreaming}
-        activeMode={mode}
-        onAttachMedia={() => {
-          // Simulation of camera / image attachment
-          handleSendMessage('[Attached image from camera: diagram.png] Please analyze this image.');
-        }}
-      />
+          {/* Chat Messages Body */}
+          <ChatView
+            theme={theme}
+            messages={messages}
+            isStreaming={isStreaming}
+            activeMode={mode}
+            onSelectPromptSuggestion={handleSendMessage}
+          />
 
-      {/* Memory & Paging Drawer Modal */}
+          {/* Floating Message Input */}
+          <MessageInput
+            theme={theme}
+            onSendMessage={handleSendMessage}
+            onStopGeneration={handleStopGeneration}
+            isStreaming={isStreaming}
+            activeMode={mode}
+            onAttachMedia={() => {
+              handleSendMessage('[Attached image from camera: diagram.png] Please analyze this image.');
+            }}
+          />
+        </View>
+      )}
+
+      {/* Bottom Global Navigation Bar */}
+      <View
+        style={[
+          styles.bottomNavBar,
+          {
+            backgroundColor: theme.card,
+            borderTopColor: theme.cardBorder,
+          },
+          theme.shadows.md,
+        ]}
+      >
+        <TouchableOpacity
+          style={[styles.navTab, activeScreen === 'home' && styles.navTabActive]}
+          onPress={() => setActiveScreen('home')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.navTabIcon, activeScreen === 'home' && { color: theme.accent }]}>
+            🏠
+          </Text>
+          <Text
+            style={[
+              styles.navTabLabel,
+              { color: activeScreen === 'home' ? theme.accent : theme.textMuted },
+            ]}
+          >
+            Home
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.navTab, activeScreen === 'chat' && styles.navTabActive]}
+          onPress={() => setActiveScreen('chat')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.navTabIcon, activeScreen === 'chat' && { color: theme.accent }]}>
+            💬
+          </Text>
+          <Text
+            style={[
+              styles.navTabLabel,
+              { color: activeScreen === 'chat' ? theme.accent : theme.textMuted },
+            ]}
+          >
+            Chat
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navTab}
+          onPress={() => setModelModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.navTabIcon}>🧠</Text>
+          <Text style={[styles.navTabLabel, { color: theme.textMuted }]}>Models</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navTab}
+          onPress={() => setPairingModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.navTabIcon}>🖥️</Text>
+          <Text style={[styles.navTabLabel, { color: theme.textMuted }]}>Desktop</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navTab}
+          onPress={() => setMemoryModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.navTabIcon}>📊</Text>
+          <Text style={[styles.navTabLabel, { color: theme.textMuted }]}>RAM</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Modals with Theme Support */}
       <MemoryGaugeModal
         visible={memoryModalVisible}
         onClose={() => setMemoryModalVisible(false)}
         profile={profile}
         pagingConfig={pagingConfig}
         onUpdatePagingConfig={handleUpdatePagingConfig}
+        theme={theme}
       />
 
-      {/* Desktop Wi-Fi / QR Pairing Modal */}
       <PairingModal
         visible={pairingModalVisible}
         onClose={() => setPairingModalVisible(false)}
@@ -217,15 +356,16 @@ export default function App() {
           setDesktopHost(newHost);
           setMode('desktop');
         }}
+        theme={theme}
       />
 
-      {/* On-Device & Desktop Model Selector */}
       <ModelSelectorModal
         visible={modelModalVisible}
         onClose={() => setModelModalVisible(false)}
         activeModel={activeLocalModel}
         profile={profile}
         onSelectModel={handleSelectModel}
+        theme={theme}
       />
     </SafeAreaView>
   );
@@ -234,6 +374,34 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+  },
+  chatScreenContainer: {
+    flex: 1,
+  },
+  bottomNavBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 14 : 8,
+    borderTopWidth: 1,
+  },
+  navTab: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+  },
+  navTabActive: {
+    transform: [{ scale: 1.05 }],
+  },
+  navTabIcon: {
+    fontSize: 20,
+    marginBottom: 2,
+  },
+  navTabLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
 });
