@@ -64,14 +64,15 @@ export const MOBILE_MODELS: OnDeviceModel[] = [
 export class DeviceProfiler {
   /**
    * Profiles the host hardware and generates an adaptive memory paging profile.
-   * In a live React Native environment, total RAM is queried via react-native-device-info
-   * or Platform APIs. Here we provide smart defaults with realistic mobile constraints.
    */
-  public static profileDevice(mockTotalRamMb?: number): DeviceMemoryProfile {
-    // Default to a typical modern 6GB Android phone if not provided
-    const totalRamMb = mockTotalRamMb ?? 6144;
-    // Android OS & system services typically consume ~2.2GB - 2.8GB
-    const osOverheadMb = Math.min(2600, Math.floor(totalRamMb * 0.4));
+  public static profileDevice(initialTotalRamMb?: number): DeviceMemoryProfile {
+    const isIOS = Platform.OS === 'ios';
+    const detectedRam = (typeof navigator !== 'undefined' && (navigator as any).deviceMemory)
+      ? (navigator as any).deviceMemory * 1024
+      : undefined;
+
+    const totalRamMb = initialTotalRamMb ?? detectedRam ?? (isIOS ? 8192 : 6144);
+    const osOverheadMb = Math.min(2600, Math.floor(totalRamMb * 0.38));
     const availableRamMb = totalRamMb - osOverheadMb;
 
     let deviceTier: DeviceTier = 'tier_2_balanced';
@@ -90,7 +91,6 @@ export class DeviceProfiler {
       recommendedModelId = 'llama-3.2-3b-q4_k_m';
       canRun3B = true;
     } else {
-      // 4GB - 6GB devices can run 3B if aggressive q4 KV paging is enabled
       canRun3B = totalRamMb >= 5500;
     }
 
