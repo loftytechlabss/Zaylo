@@ -1,3 +1,4 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import type { DownloadProgress } from '../types';
 import type { ZayloModel } from './modelsCatalog';
 
@@ -8,6 +9,7 @@ interface ActiveDownloadRecord {
   progress: DownloadProgress;
   abortController?: AbortController;
   xhr?: XMLHttpRequest;
+  downloadResumable?: FileSystem.DownloadResumable;
   listeners: Set<ProgressListener>;
 }
 
@@ -20,13 +22,22 @@ class ModelStorageManager {
     this.loadInstalledFromStorage();
   }
 
-  private loadInstalledFromStorage(): void {
+  private async loadInstalledFromStorage(): Promise<void> {
     try {
       if (typeof localStorage !== 'undefined') {
         const stored = localStorage.getItem('zaylo_installed_models');
         if (stored) {
           const ids: string[] = JSON.parse(stored);
           ids.forEach((id) => this.installedModelIds.add(id));
+        }
+      }
+
+      // In native Expo mobile, also check if files exist on disk
+      if (FileSystem.documentDirectory) {
+        const modelsDir = `${FileSystem.documentDirectory}models/`;
+        const dirInfo = await FileSystem.getInfoAsync(modelsDir);
+        if (dirInfo.exists && (dirInfo as any).isDirectory) {
+          // files are present
         }
       }
     } catch {}
@@ -85,8 +96,8 @@ class ModelStorageManager {
 
   /**
    * Starts a 100% genuine network download of GGUF model weights from Hugging Face
-   * using ReadableStream / XMLHttpRequest, computing real bytes transferred,
-   * live network bandwidth, and persistent cache storage.
+   * using Expo native FileSystem.createDownloadResumable (on mobile) or ReadableStream (on web),
+   * calculating real transferred bytes and live download speed.
    */
   public startDownload(
     model: ZayloModel,
@@ -150,7 +161,78 @@ class ModelStorageManager {
     };
 
     try {
-      // Check if streaming fetch is supported
+      // 1. In native Expo environment (iOS/Android): use native FileSystem download task
+      if (FileSystem.documentDirectory) {
+        const modelsDir = `${FileSystem.documentDirectory}models/`;
+        try {
+          const dirInfo = await FileSystem.getInfoAsync(modelsDir);
+          if (!dirInfo.exists) {
+            await FileSystem.makeDirectoryAsync(modelsDir, { intermediates: true });
+          }
+        } catch {}
+
+        const destinationUri = `${modelsDir}${model.id}.gguf`;
+
+        const downloadResumable = FileSystem.createDownloadResumable(
+          model.downloadUrl,
+          destinationUri,
+          {},
+          (downloadProgress) => {
+            const downloadedBytes = downloadProgress.totalBytesWritten;
+            const totalBytes = downloadProgress.totalBytesExpectedToWrite > 0
+              ? downloadProgress.totalBytesExpectedToWrite
+              : model.sizeMb * 1024 * 1024;
+            const now = Date.now();
+
+            if (now - lastNotifyTime >= 150 || downloadedBytes >= totalBytes) {
+              lastNotifyTime = now;
+              const elapsedSec = Math.max(0.001, (now - startTime) / 1000);
+              const speedBytesPerSec = downloadedBytes / elapsedSec;
+              const speedMbS = Number((speedBytesPerSec / (1024 * 1024)).toFixed(1));
+              const downloadedMb = Number((downloadedBytes / (1024 * 1024)).toFixed(1));
+              const totalMb = Number((totalBytes / (1024 * 1024)).toFixed(1));
+              const percent = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100));
+              const remainingBytes = Math.max(0, totalBytes - downloadedBytes);
+              const etaSeconds = speedBytesPerSec > 0 ? Math.ceil(remainingBytes / speedBytesPerSec) : 0;
+
+              notify({
+                modelId: model.id,
+                downloadedMb,
+                totalMb,
+                percent,
+                speedMbS,
+                etaSeconds,
+                status: percent >= 100 ? 'completed' : 'downloading',
+              });
+            }
+          }
+        );
+
+        record.downloadResumable = downloadResumable;
+        const result = await downloadResumable.downloadAsync();
+
+        if (result && result.uri) {
+          this.activeDownloads.delete(model.id);
+          this.installedModelIds.add(model.id);
+          this.saveInstalledToStorage();
+          this.notifyInstalledChanged();
+
+          notify({
+            modelId: model.id,
+            downloadedMb: model.sizeMb,
+            totalMb: model.sizeMb,
+            percent: 100,
+            speedMbS: 0,
+            etaSeconds: 0,
+            status: 'completed',
+          });
+
+          if (onComplete) onComplete();
+          return;
+        }
+      }
+
+      // 2. Web or fallback environment: use HTTP streaming fetch / XHR
       const response = await fetch(model.downloadUrl, {
         method: 'GET',
         signal: record.abortController?.signal,
@@ -177,7 +259,6 @@ class ModelStorageManager {
           downloadedBytes += value.length;
           const now = Date.now();
 
-          // Throttle progress emissions to ~150ms for smooth 60fps UI
           if (now - lastNotifyTime >= 150 || downloadedBytes >= totalBytes) {
             lastNotifyTime = now;
             const elapsedSec = Math.max(0.001, (now - startTime) / 1000);
@@ -200,8 +281,7 @@ class ModelStorageManager {
           }
         }
       } else {
-        // Fallback for environments where ReadableStream is not exposed:
-        // Use real XMLHttpRequest with onprogress
+        // Fallback XHR for older WebView runtime
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           record.xhr = xhr;
@@ -244,7 +324,6 @@ class ModelStorageManager {
         });
       }
 
-      // Download successfully completed
       this.activeDownloads.delete(model.id);
       this.installedModelIds.add(model.id);
       this.saveInstalledToStorage();
@@ -263,7 +342,6 @@ class ModelStorageManager {
       if (onComplete) onComplete();
     } catch (err: any) {
       if (err?.name === 'AbortError' || err?.message === 'Download aborted') {
-        // User canceled intentionally
         return;
       }
       this.activeDownloads.delete(model.id);
@@ -277,6 +355,9 @@ class ModelStorageManager {
   public cancelDownload(modelId: string): void {
     const active = this.activeDownloads.get(modelId);
     if (active) {
+      if (active.downloadResumable) {
+        active.downloadResumable.cancelAsync().catch(() => {});
+      }
       if (active.abortController) {
         active.abortController.abort();
       }
@@ -298,6 +379,12 @@ class ModelStorageManager {
     this.installedModelIds.delete(modelId);
     this.saveInstalledToStorage();
     this.notifyInstalledChanged();
+
+    // If native file exists, remove it
+    if (FileSystem.documentDirectory) {
+      const fileUri = `${FileSystem.documentDirectory}models/${modelId}.gguf`;
+      FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+    }
   }
 
   public async getStorageStatsAsync(): Promise<{ totalInstalledMb: number; freeSpaceGb: number }> {
