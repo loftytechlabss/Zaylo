@@ -21,6 +21,10 @@ class ModelStorageManager {
     return this.installedModelIds.has(id);
   }
 
+  public isModelDownloaded(id: string): boolean {
+    return this.isModelInstalled(id);
+  }
+
   public subscribeToInstalled(listener: InstalledChangeListener): () => void {
     this.installedListeners.add(listener);
     listener(this.getInstalledModelIds());

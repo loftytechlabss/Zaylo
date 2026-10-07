@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { lightTheme, Theme } from '../theme/theme';
-import { MOBILE_MODELS } from '../engine/deviceProfiler';
+import { ZAYLO_MODELS } from '../engine/modelsCatalog';
+import { ModelStorage } from '../engine/modelStorage';
 import type { OnDeviceModel, DeviceMemoryProfile } from '../types';
 import { Icon } from './common/Icon';
 
@@ -29,13 +31,68 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   onSelectModel,
   theme = lightTheme,
 }) => {
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      scaleAnim.setValue(0.95);
+      slideAnim.setValue(20);
+      fadeAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 70,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 70,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible, scaleAnim, slideAnim, fadeAnim]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.96,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View
+    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
+      <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+        <Animated.View
           style={[
             styles.modalCard,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+              transform: [
+                { scale: scaleAnim },
+                { translateY: slideAnim },
+              ],
+            },
             theme.shadows.lg,
           ]}
         >
@@ -47,45 +104,60 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               </Text>
             </View>
             <TouchableOpacity
-              onPress={onClose}
+              onPress={handleClose}
               style={[styles.closeButton, { backgroundColor: theme.backgroundSecondary }]}
+              activeOpacity={0.7}
             >
               <Icon name="x" size={16} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16 }}>
-            {MOBILE_MODELS.map((model) => {
-              const isSelected = activeModel ? model.id === activeModel.id : false;
-              const isRecommended = model.id === profile.recommendedModelId;
-              const is3B = model.id.includes('3b');
-              const canRun = is3B ? profile.canRun3B : true;
+            {ZAYLO_MODELS.map((m) => {
+              const isDownloaded = ModelStorage.isModelDownloaded(m.id);
+              const isSelected = activeModel ? m.id === activeModel.id : false;
+              const isRecommended = m.id === 'llama-3.2-1b-instruct';
+              const isFlagship = m.sizeMb > 1500;
+              const canRun = isFlagship ? profile.canRun3B : true;
+
+              const convertedModel: OnDeviceModel = {
+                id: m.id,
+                name: m.name,
+                tagline: m.description,
+                parameters: m.parameterCount,
+                sizeMb: m.sizeMb,
+                requiredRamMb: Math.round(m.sizeMb * 1.3),
+                minTier: isFlagship ? 'tier_3_flagship' : 'tier_2_balanced',
+                quantization: m.quantization,
+                downloadUrl: m.downloadUrl,
+                isDownloaded,
+              };
 
               return (
                 <TouchableOpacity
-                  key={model.id}
+                  key={m.id}
                   style={[
                     styles.modelCard,
                     {
                       backgroundColor: isSelected ? theme.backgroundSecondary : theme.cardElevated,
                       borderColor: isSelected ? theme.accent : theme.cardBorder,
                     },
-                    !canRun && { opacity: 0.5 },
+                    (!canRun || !isDownloaded) && { opacity: isDownloaded ? 0.6 : 0.8 },
                     theme.shadows.sm,
                   ]}
                   onPress={() => {
-                    if (canRun) {
-                      onSelectModel(model);
-                      onClose();
+                    if (canRun && isDownloaded) {
+                      onSelectModel(convertedModel);
+                      handleClose();
                     }
                   }}
-                  activeOpacity={canRun ? 0.7 : 1}
+                  activeOpacity={canRun && isDownloaded ? 0.7 : 1}
                 >
                   <View style={styles.cardTopRow}>
                     <View style={{ flex: 1 }}>
                       <View style={styles.titleRow}>
                         <Text style={[styles.modelName, { color: theme.textPrimary }]}>
-                          {model.name}
+                          {m.name}
                         </Text>
                         {isRecommended && (
                           <View style={[styles.recommendedBadge, { backgroundColor: theme.accentLight }]}>
@@ -94,16 +166,22 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                             </Text>
                           </View>
                         )}
-                        {is3B && (
-                          <View style={[styles.pagedBadge, { backgroundColor: theme.cyanLight }]}>
-                            <Text style={[styles.pagedBadgeText, { color: theme.cyan }]}>
-                              PAGED MMAP
+                        {isDownloaded ? (
+                          <View style={[styles.pagedBadge, { backgroundColor: theme.successLight }]}>
+                            <Text style={[styles.pagedBadgeText, { color: theme.success }]}>
+                              READY
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.pagedBadge, { backgroundColor: theme.backgroundSecondary }]}>
+                            <Text style={[styles.pagedBadgeText, { color: theme.textMuted }]}>
+                              NOT DOWNLOADED
                             </Text>
                           </View>
                         )}
                       </View>
                       <Text style={[styles.tagline, { color: theme.textMuted }]}>
-                        {model.tagline}
+                        {m.description}
                       </Text>
                     </View>
                     <View
@@ -120,19 +198,28 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                   <View style={styles.statsRow}>
                     <View style={[styles.statChip, { backgroundColor: theme.backgroundSecondary }]}>
                       <Icon name="package" size={11} color={theme.accent} style={{ marginRight: 4 }} />
-                      <Text style={[styles.statChipText, { color: theme.textSecondary }]}>{model.sizeMb} MB</Text>
+                      <Text style={[styles.statChipText, { color: theme.textSecondary }]}>{m.sizeMb} MB</Text>
                     </View>
                     <View style={[styles.statChip, { backgroundColor: theme.backgroundSecondary }]}>
                       <Icon name="cpu" size={11} color={theme.accent} style={{ marginRight: 4 }} />
-                      <Text style={[styles.statChipText, { color: theme.textSecondary }]}>~{model.requiredRamMb} MB</Text>
+                      <Text style={[styles.statChipText, { color: theme.textSecondary }]}>~{Math.round(m.sizeMb * 1.3)} MB</Text>
                     </View>
                     <View style={[styles.statChip, { backgroundColor: theme.backgroundSecondary }]}>
                       <Icon name="sliders" size={11} color={theme.textMuted} style={{ marginRight: 4 }} />
-                      <Text style={[styles.statChipText, { color: theme.textSecondary }]}>{model.quantization}</Text>
+                      <Text style={[styles.statChipText, { color: theme.textSecondary }]}>{m.quantization}</Text>
                     </View>
                   </View>
 
-                  {!canRun && (
+                  {!isDownloaded && (
+                    <View style={styles.warningRow}>
+                      <Icon name="info" size={12} color={theme.textMuted} style={{ marginRight: 4 }} />
+                      <Text style={[styles.disabledWarning, { color: theme.textMuted }]}>
+                        Go to Model Studio tab to download this model first.
+                      </Text>
+                    </View>
+                  )}
+
+                  {isDownloaded && !canRun && (
                     <View style={styles.warningRow}>
                       <Icon name="alert-triangle" size={12} color={theme.warning} style={{ marginRight: 4 }} />
                       <Text style={[styles.disabledWarning, { color: theme.warning }]}>
@@ -144,8 +231,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               );
             })}
           </ScrollView>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 };
@@ -160,8 +247,9 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
+    maxWidth: 480,
     maxHeight: '80%',
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
     overflow: 'hidden',
   },
@@ -188,7 +276,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modelCard: {
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1.5,
     padding: 14,
     marginBottom: 12,

@@ -15,6 +15,26 @@ export interface PastelPalette {
   peach: { bg: string; border: string; text: string; iconBg: string };
 }
 
+export interface ThemeRadii {
+  xs: number; // 8 - micro tags, status pills
+  sm: number; // 12 - badges, small buttons, inner inputs
+  md: number; // 16 - suggestion chips, spec boxes, media
+  lg: number; // 20 - cards, action tiles
+  xl: number; // 24 - prominent heroes, storage cards
+  xxl: number; // 28 - modal sheets, dialog cards
+  pill: number; // 9999 - full rounded pills, nav bar
+}
+
+export const radii: ThemeRadii = {
+  xs: 8,
+  sm: 12,
+  md: 16,
+  lg: 20,
+  xl: 24,
+  xxl: 28,
+  pill: 9999,
+};
+
 export interface Theme {
   isDark: boolean;
   background: string;
@@ -47,6 +67,7 @@ export interface Theme {
   divider: string;
   pastels: PastelPalette;
   shadows: ThemeShadows;
+  radii: ThemeRadii;
 }
 
 // Modern Neumorphic Soft Pastel Light Theme (matching user reference)
@@ -178,6 +199,7 @@ export const lightTheme: Theme = {
       }),
     },
   },
+  radii,
 };
 
 // Sleek Slate Dark Theme
@@ -309,4 +331,5 @@ export const darkTheme: Theme = {
       }),
     },
   },
+  radii,
 };

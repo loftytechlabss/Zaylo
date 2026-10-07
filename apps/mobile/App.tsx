@@ -33,6 +33,49 @@ import { Icon } from './src/components/common/Icon';
 
 type ActiveScreen = 'home' | 'models' | 'chat';
 
+const AnimatedNavTab: React.FC<{
+  label?: string;
+  icon: string;
+  isActive: boolean;
+  onPress: () => void;
+  theme: Theme;
+}> = ({ label, icon, isActive, onPress, theme }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[
+          styles.floatingTab,
+          isActive && [styles.floatingTabActive, { backgroundColor: theme.floatingNavActive }],
+        ]}
+        onPressIn={() =>
+          Animated.spring(scaleAnim, { toValue: 0.92, useNativeDriver: true }).start()
+        }
+        onPressOut={() =>
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            friction: 6,
+            tension: 70,
+            useNativeDriver: true,
+          }).start()
+        }
+        onPress={onPress}
+        activeOpacity={0.85}
+      >
+        <Icon
+          name={icon}
+          size={18}
+          color={isActive ? '#ffffff' : theme.floatingNavText}
+        />
+        {isActive && label && (
+          <Text style={styles.floatingTabActiveText}>{label}</Text>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 export default function App() {
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const theme: Theme = useMemo(
@@ -45,22 +88,50 @@ export default function App() {
 
   const [activeScreen, setActiveScreen] = useState<ActiveScreen>('home');
   const screenFadeAnim = useRef(new Animated.Value(1)).current;
+  const screenSlideAnim = useRef(new Animated.Value(0)).current;
+  const screenScaleAnim = useRef(new Animated.Value(1)).current;
 
   const navigateToScreen = (screen: ActiveScreen) => {
     if (screen === activeScreen) return;
-    Animated.sequence([
+    Animated.parallel([
       Animated.timing(screenFadeAnim, {
-        toValue: 0.2,
+        toValue: 0.15,
         duration: 90,
         useNativeDriver: true,
       }),
-      Animated.timing(screenFadeAnim, {
-        toValue: 1,
-        duration: 160,
+      Animated.timing(screenSlideAnim, {
+        toValue: 6,
+        duration: 90,
         useNativeDriver: true,
       }),
-    ]).start();
-    setActiveScreen(screen);
+      Animated.timing(screenScaleAnim, {
+        toValue: 0.985,
+        duration: 90,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setActiveScreen(screen);
+      screenSlideAnim.setValue(-6);
+      Animated.parallel([
+        Animated.timing(screenFadeAnim, {
+          toValue: 1,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+        Animated.spring(screenSlideAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 70,
+          useNativeDriver: true,
+        }),
+        Animated.spring(screenScaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 70,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
   };
 
   const initialProfile = useMemo(() => DeviceProfiler.profileDevice(), []);
@@ -219,7 +290,18 @@ export default function App() {
       />
 
       {/* Screen Container with animated transition */}
-      <Animated.View style={[styles.screenContainer, { opacity: screenFadeAnim }]}>
+      <Animated.View
+        style={[
+          styles.screenContainer,
+          {
+            opacity: screenFadeAnim,
+            transform: [
+              { translateY: screenSlideAnim },
+              { scale: screenScaleAnim },
+            ],
+          },
+        ]}
+      >
         {activeScreen === 'home' && (
           <HomeView
             theme={theme}
@@ -295,70 +377,43 @@ export default function App() {
             theme.shadows.floating,
           ]}
         >
-        <TouchableOpacity
-          style={[
-            styles.floatingTab,
-            activeScreen === 'home' && styles.floatingTabActive,
-          ]}
-          onPress={() => navigateToScreen('home')}
-          activeOpacity={0.8}
-        >
-          <Icon
-            name="home"
-            size={18}
-            color={activeScreen === 'home' ? '#ffffff' : theme.floatingNavText}
+          <AnimatedNavTab
+            label="Home"
+            icon="home"
+            isActive={activeScreen === 'home'}
+            onPress={() => navigateToScreen('home')}
+            theme={theme}
           />
-          {activeScreen === 'home' && (
-            <Text style={styles.floatingTabActiveText}>Home</Text>
-          )}
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.floatingTab,
-            activeScreen === 'models' && styles.floatingTabActive,
-          ]}
-          onPress={() => navigateToScreen('models')}
-          activeOpacity={0.8}
-        >
-          <Icon
-            name="cpu"
-            size={18}
-            color={activeScreen === 'models' ? '#ffffff' : theme.floatingNavText}
+          <AnimatedNavTab
+            label="Models"
+            icon="cpu"
+            isActive={activeScreen === 'models'}
+            onPress={() => navigateToScreen('models')}
+            theme={theme}
           />
-          {activeScreen === 'models' && (
-            <Text style={styles.floatingTabActiveText}>Models</Text>
-          )}
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.floatingTab}
-          onPress={() => navigateToScreen('chat')}
-          activeOpacity={0.8}
-        >
-          <Icon
-            name="message-square"
-            size={18}
-            color={theme.floatingNavText}
+          <AnimatedNavTab
+            icon="message-square"
+            isActive={false}
+            onPress={() => navigateToScreen('chat')}
+            theme={theme}
           />
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.floatingTab}
-          onPress={() => setPairingModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <Icon name="monitor" size={18} color={theme.floatingNavText} />
-        </TouchableOpacity>
+          <AnimatedNavTab
+            icon="monitor"
+            isActive={false}
+            onPress={() => setPairingModalVisible(true)}
+            theme={theme}
+          />
 
-        <TouchableOpacity
-          style={styles.floatingTab}
-          onPress={() => setMemoryModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <Icon name="activity" size={18} color={theme.floatingNavText} />
-        </TouchableOpacity>
-      </View>
+          <AnimatedNavTab
+            icon="activity"
+            isActive={false}
+            onPress={() => setMemoryModalVisible(true)}
+            theme={theme}
+          />
+        </View>
       )}
 
       {/* Modals with Theme Support */}

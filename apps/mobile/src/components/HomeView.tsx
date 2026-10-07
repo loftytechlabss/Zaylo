@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Platform,
   Switch,
+  Animated,
 } from 'react-native';
 import type { Theme } from '../theme/theme';
 import type {
@@ -47,6 +48,36 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onToggleTheme,
 }) => {
   const isDesktop = mode === 'desktop';
+
+  // Pulse animation for active status dot
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.3,
+          duration: 1300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1300,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseAnim]);
+
+  // Tactile press scale for start hero
+  const heroScaleAnim = useRef(new Animated.Value(1)).current;
+  const onHeroPressIn = () => {
+    Animated.spring(heroScaleAnim, { toValue: 0.975, useNativeDriver: true }).start();
+  };
+  const onHeroPressOut = () => {
+    Animated.spring(heroScaleAnim, { toValue: 1, friction: 6, tension: 70, useNativeDriver: true }).start();
+  };
 
   // Local switch states matching reference UI
   const [localEngineEnabled, setLocalEngineEnabled] = useState(!!activeLocalModel);
@@ -103,10 +134,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
             activeOpacity={0.8}
           >
             <ZLogo size={24} variant={theme.isDark ? 'white' : 'dark'} />
-            <View
+            <Animated.View
               style={[
                 styles.avatarDot,
-                { backgroundColor: theme.success },
+                { backgroundColor: theme.success, transform: [{ scale: pulseAnim }] },
               ]}
             />
           </TouchableOpacity>
@@ -298,40 +329,44 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </View>
 
       {/* 4. Primary Chat Launch Banner (Matching Middle Screen "Start ->" Hero) */}
-      <TouchableOpacity
-        style={[
-          styles.startHeroBanner,
-          {
-            backgroundColor: theme.card,
-            borderColor: theme.cardBorder,
-          },
-          theme.shadows.md,
-        ]}
-        onPress={() => onOpenChat()}
-        activeOpacity={0.85}
-      >
-        <View style={styles.startHeroLeft}>
-          <Text style={[styles.startHeroTitle, { color: theme.textPrimary }]}>
-            Start New Session
-          </Text>
-          <Text style={[styles.startHeroDesc, { color: theme.textMuted }]}>
-            {isDesktop
-              ? 'Streaming from Zaylo Desktop gateway'
-              : 'Zero-cloud execution on local hardware'}
-          </Text>
-        </View>
-
-        <View
+      <Animated.View style={{ transform: [{ scale: heroScaleAnim }] }}>
+        <TouchableOpacity
           style={[
-            styles.startCircleBtn,
-            { backgroundColor: theme.floatingNav },
+            styles.startHeroBanner,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            },
             theme.shadows.md,
           ]}
+          onPressIn={onHeroPressIn}
+          onPressOut={onHeroPressOut}
+          onPress={() => onOpenChat()}
+          activeOpacity={0.9}
         >
-          <Text style={styles.startCircleText}>Start</Text>
-          <Icon name="arrow-right" size={14} color="#ffffff" />
-        </View>
-      </TouchableOpacity>
+          <View style={styles.startHeroLeft}>
+            <Text style={[styles.startHeroTitle, { color: theme.textPrimary }]}>
+              Start New Session
+            </Text>
+            <Text style={[styles.startHeroDesc, { color: theme.textMuted }]}>
+              {isDesktop
+                ? 'Streaming from Zaylo Desktop gateway'
+                : 'Zero-cloud execution on local hardware'}
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.startCircleBtn,
+              { backgroundColor: theme.floatingNav },
+              theme.shadows.md,
+            ]}
+          >
+            <Text style={styles.startCircleText}>Start</Text>
+            <Icon name="arrow-right" size={14} color="#ffffff" />
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
 
       {/* 5. Clean Quick Tasks */}
       <View style={styles.tasksSection}>

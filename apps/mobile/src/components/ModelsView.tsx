@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,51 @@ import {
   TextInput,
   StyleSheet,
   Platform,
+  Animated,
 } from 'react-native';
 import type { Theme } from '../theme/theme';
 import type { OnDeviceModel, DeviceMemoryProfile, MemoryPagingConfig, DownloadProgress } from '../types';
 import { ZAYLO_MODELS, ZayloModel } from '../engine/modelsCatalog';
 import { ModelStorage } from '../engine/modelStorage';
 import { Icon } from './common/Icon';
+
+/**
+ * Smooth Animated Progress Bar for progressive model weight downloads
+ */
+const SmoothProgressBar: React.FC<{
+  percent: number;
+  trackColor: string;
+  fillColor: string;
+}> = ({ percent, trackColor, fillColor }) => {
+  const animatedPercent = useRef(new Animated.Value(percent)).current;
+
+  useEffect(() => {
+    Animated.timing(animatedPercent, {
+      toValue: Math.max(0, Math.min(100, percent)),
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+  }, [percent, animatedPercent]);
+
+  const widthInterpolated = animatedPercent.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
+
+  return (
+    <View style={[styles.progressBarTrack, { backgroundColor: trackColor }]}>
+      <Animated.View
+        style={[
+          styles.progressBarFill,
+          {
+            width: widthInterpolated,
+            backgroundColor: fillColor,
+          },
+        ]}
+      />
+    </View>
+  );
+};
 
 interface ModelsViewProps {
   theme: Theme;
@@ -234,17 +273,11 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         </View>
 
         {/* Visual Flash Bar */}
-        <View style={[styles.storageBarTrack, { backgroundColor: theme.backgroundSecondary }]}>
-          <View
-            style={[
-              styles.storageBarFill,
-              {
-                width: `${Math.min(100, Math.max(8, Math.round((totalInstalledSizeMb / 8000) * 100)))}%`,
-                backgroundColor: theme.pastels.blue.text,
-              },
-            ]}
-          />
-        </View>
+        <SmoothProgressBar
+          percent={Math.min(100, Math.max(8, Math.round((totalInstalledSizeMb / 8000) * 100)))}
+          trackColor={theme.backgroundSecondary}
+          fillColor={theme.pastels.blue.text}
+        />
       </View>
 
       {/* 3. Search Bar */}
@@ -415,17 +448,11 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                       </Text>
                     </View>
 
-                    <View style={[styles.progressBarTrack, { backgroundColor: theme.cardBorder }]}>
-                      <View
-                        style={[
-                          styles.progressBarFill,
-                          {
-                            width: `${progress.percent}%`,
-                            backgroundColor: theme.accent,
-                          },
-                        ]}
-                      />
-                    </View>
+                    <SmoothProgressBar
+                      percent={progress.percent}
+                      trackColor={theme.cardBorder}
+                      fillColor={theme.accent}
+                    />
 
                     <TouchableOpacity
                       style={styles.cancelDownloadBtn}

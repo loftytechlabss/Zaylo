@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
+  Animated,
 } from 'react-native';
 import type { Theme } from '../theme/theme';
 import type { ChatMessage, HybridMode, OnDeviceModel } from '../types';
@@ -33,6 +34,196 @@ const CHAT_SUGGESTIONS: ChatSuggestion[] = [
   { iconName: 'database', text: 'How do database indexes improve query speed?' },
   { iconName: 'file-text', text: 'Draft a clean technical release note' },
 ];
+
+/**
+ * Animated Pulsing Token Streaming Cursor
+ */
+const BlinkingCursor: React.FC<{ color: string }> = ({ color }) => {
+  const opacityAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacityAnim, {
+          toValue: 0.15,
+          duration: 450,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 450,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacityAnim]);
+
+  return (
+    <Animated.Text style={{ color, opacity: opacityAnim, fontWeight: '800' }}>
+      {' ▋'}
+    </Animated.Text>
+  );
+};
+
+/**
+ * Animated Suggestion Chip with Tactile Spring Scale
+ */
+const SuggestionChipItem: React.FC<{
+  item: ChatSuggestion;
+  theme: Theme;
+  onPress: () => void;
+}> = ({ item, theme, onPress }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[
+          styles.suggestionChip,
+          {
+            backgroundColor: theme.card,
+            borderColor: theme.cardBorder,
+          },
+          theme.shadows.sm,
+        ]}
+        onPressIn={() =>
+          Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true }).start()
+        }
+        onPressOut={() =>
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            friction: 6,
+            tension: 70,
+            useNativeDriver: true,
+          }).start()
+        }
+        onPress={onPress}
+        activeOpacity={0.85}
+      >
+        <View
+          style={[
+            styles.suggestionIconBox,
+            { backgroundColor: theme.backgroundSecondary },
+          ]}
+        >
+          <Icon name={item.iconName} size={15} color={theme.accent} />
+        </View>
+        <Text
+          style={[styles.suggestionText, { color: theme.textPrimary }]}
+          numberOfLines={2}
+        >
+          {item.text}
+        </Text>
+        <Icon name="arrow-up-right" size={14} color={theme.textMuted} />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+/**
+ * Animated Message Bubble Row with Smooth Spring Entrance
+ */
+const MessageRowItem: React.FC<{
+  message: ChatMessage;
+  theme: Theme;
+}> = ({ message, theme }) => {
+  const isUser = message.role === 'user';
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(8)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 80,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.messageRow,
+        isUser ? styles.userRow : styles.assistantRow,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
+    >
+      {message.imageUri && (
+        <Image source={{ uri: message.imageUri }} style={styles.attachedImage} />
+      )}
+
+      <View
+        style={[
+          styles.bubble,
+          isUser
+            ? [
+                styles.userBubble,
+                {
+                  backgroundColor: theme.userBubble,
+                },
+                theme.shadows.sm,
+              ]
+            : [
+                styles.assistantBubble,
+                {
+                  backgroundColor: theme.assistantBubble,
+                  borderColor: theme.assistantBorder,
+                },
+                theme.shadows.sm,
+              ],
+        ]}
+      >
+        <Text
+          style={[
+            styles.messageText,
+            { color: isUser ? theme.userText : theme.assistantText },
+          ]}
+        >
+          {message.content}
+          {message.isStreaming && <BlinkingCursor color={theme.accent} />}
+        </Text>
+      </View>
+
+      {!isUser && message.metrics && (
+        <View
+          style={[
+            styles.metricsBadge,
+            {
+              backgroundColor: theme.cardElevated,
+              borderColor: theme.cardBorder,
+            },
+          ]}
+        >
+          <Icon
+            name={
+              message.metrics.backendUsed === 'on_device_paged'
+                ? 'cpu'
+                : 'monitor'
+            }
+            size={11}
+            color={theme.accent}
+            style={{ marginRight: 4 }}
+          />
+          <Text style={[styles.metricsText, { color: theme.textMuted }]}>
+            {message.metrics.tokensPerSec} tok/s • {message.metrics.ttftMs}ms TTFT
+          </Text>
+        </View>
+      )}
+    </Animated.View>
+  );
+};
 
 export const ChatView: React.FC<ChatViewProps> = ({
   theme,
@@ -115,35 +306,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
             SUGGESTIONS
           </Text>
           {CHAT_SUGGESTIONS.map((item, idx) => (
-            <TouchableOpacity
+            <SuggestionChipItem
               key={idx}
-              style={[
-                styles.suggestionChip,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.cardBorder,
-                },
-                theme.shadows.sm,
-              ]}
+              item={item}
+              theme={theme}
               onPress={() => onSelectPromptSuggestion(item.text)}
-              activeOpacity={0.7}
-            >
-              <View
-                style={[
-                  styles.suggestionIconBox,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-              >
-                <Icon name={item.iconName} size={15} color={theme.accent} />
-              </View>
-              <Text
-                style={[styles.suggestionText, { color: theme.textPrimary }]}
-                numberOfLines={2}
-              >
-                {item.text}
-              </Text>
-              <Icon name="arrow-up-right" size={14} color={theme.textMuted} />
-            </TouchableOpacity>
+            />
           ))}
         </View>
       </ScrollView>
@@ -157,79 +325,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
       contentContainerStyle={styles.messagesContainer}
       showsVerticalScrollIndicator={false}
     >
-      {messages.map((message) => {
-        const isUser = message.role === 'user';
-
-        return (
-          <View
-            key={message.id}
-            style={[
-              styles.messageRow,
-              isUser ? styles.userRow : styles.assistantRow,
-            ]}
-          >
-            {message.imageUri && (
-              <Image source={{ uri: message.imageUri }} style={styles.attachedImage} />
-            )}
-
-            <View
-              style={[
-                styles.bubble,
-                isUser
-                  ? [
-                      styles.userBubble,
-                      {
-                        backgroundColor: theme.userBubble,
-                      },
-                      theme.shadows.sm,
-                    ]
-                  : [
-                      styles.assistantBubble,
-                      {
-                        backgroundColor: theme.assistantBubble,
-                        borderColor: theme.assistantBorder,
-                      },
-                      theme.shadows.sm,
-                    ],
-              ]}
-            >
-              <Text
-                style={[
-                  styles.messageText,
-                  { color: isUser ? theme.userText : theme.assistantText },
-                ]}
-              >
-                {message.content}
-                {message.isStreaming && (
-                  <Text style={{ color: theme.accent, fontWeight: '800' }}> ▋</Text>
-                )}
-              </Text>
-            </View>
-
-            {!isUser && message.metrics && (
-              <View
-                style={[
-                  styles.metricsBadge,
-                  {
-                    backgroundColor: theme.cardElevated,
-                    borderColor: theme.cardBorder,
-                  },
-                ]}
-              >
-                <Icon
-                  name={message.metrics.backendUsed === 'on_device_paged' ? 'cpu' : 'monitor'}
-                  size={11}
-                  color={theme.accent}
-                  style={{ marginRight: 4 }}
-                />
-                <Text style={[styles.metricsText, { color: theme.textMuted }]}>
-                  {message.metrics.tokensPerSec} tok/s • {message.metrics.ttftMs}ms TTFT
-                </Text>
-              </View>
-            )}
-          </View>
-        );
-      })}
+      {messages.map((message) => (
+        <MessageRowItem key={message.id} message={message} theme={theme} />
+      ))}
     </ScrollView>
   );
 };

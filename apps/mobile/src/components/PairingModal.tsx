@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { lightTheme, Theme } from '../theme/theme';
 import type { DesktopHost } from '../types';
@@ -33,6 +34,54 @@ export const PairingModal: React.FC<PairingModalProps> = ({
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
 
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      scaleAnim.setValue(0.95);
+      slideAnim.setValue(20);
+      fadeAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 70,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 70,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible, scaleAnim, slideAnim, fadeAnim]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.96,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  };
+
   const handleTestConnection = async () => {
     setTesting(true);
     setTestResult(null);
@@ -57,12 +106,19 @@ export const PairingModal: React.FC<PairingModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View
+    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
+      <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+        <Animated.View
           style={[
             styles.modalCard,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+              transform: [
+                { scale: scaleAnim },
+                { translateY: slideAnim },
+              ],
+            },
             theme.shadows.lg,
           ]}
         >
@@ -74,7 +130,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
               </Text>
             </View>
             <TouchableOpacity
-              onPress={onClose}
+              onPress={handleClose}
               style={[styles.closeButton, { backgroundColor: theme.backgroundSecondary }]}
             >
               <Icon name="x" size={16} color={theme.textSecondary} />
@@ -173,8 +229,8 @@ export const PairingModal: React.FC<PairingModalProps> = ({
               </Text>
             </View>
           </View>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 };
@@ -189,7 +245,8 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    borderRadius: 20,
+    maxWidth: 440,
+    borderRadius: 24,
     borderWidth: 1,
     overflow: 'hidden',
   },
