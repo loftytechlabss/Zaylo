@@ -23,7 +23,7 @@ interface ModelsViewProps {
   onOpenChat: () => void;
 }
 
-type ModelTab = 'all' | 'installed' | 'small' | 'large';
+type ModelCategory = 'all' | 'installed' | 'compact' | 'high_capacity';
 
 export const ModelsView: React.FC<ModelsViewProps> = ({
   theme,
@@ -32,17 +32,18 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   onBackToHome,
   onOpenChat,
 }) => {
-  const [activeTab, setActiveTab] = useState<ModelTab>('all');
+  const [activeCategory, setActiveCategory] = useState<ModelCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [temperature, setTemperature] = useState(0.7); // 0.2 (Precise) to 1.0 (Creative)
 
   const filteredModels = useMemo(() => {
     let list: ZayloModel[] = ZAYLO_MODELS;
 
-    if (activeTab === 'installed') {
+    if (activeCategory === 'installed') {
       list = ZAYLO_MODELS.filter((m) => m.isInstalled || m.id === activeModel.id);
-    } else if (activeTab === 'small') {
+    } else if (activeCategory === 'compact') {
       list = ZAYLO_MODELS.filter((m) => m.sizeMb < 1000);
-    } else if (activeTab === 'large') {
+    } else if (activeCategory === 'high_capacity') {
       list = ZAYLO_MODELS.filter((m) => m.sizeMb >= 1000);
     }
 
@@ -57,7 +58,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     }
 
     return list;
-  }, [activeTab, searchQuery, activeModel.id]);
+  }, [activeCategory, searchQuery, activeModel.id]);
 
   const handleSelect = (model: ZayloModel) => {
     const converted: OnDeviceModel = {
@@ -81,32 +82,28 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* 1. Header with Title & Back Navigation */}
+      {/* 1. Header (Matching Right Screen in Reference UI) */}
       <View style={styles.headerRow}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={[
-              styles.backButton,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-              theme.shadows.sm,
-            ]}
-            onPress={onBackToHome}
-            activeOpacity={0.7}
-          >
-            <Icon name="arrow-left" size={18} color={theme.textPrimary} />
-          </TouchableOpacity>
-          <View>
-            <Text style={[styles.mainTitle, { color: theme.textPrimary }]}>Model Studio</Text>
-            <Text style={[styles.mainSubtitle, { color: theme.textMuted }]}>
-              Zaylo Desktop Certified Model Catalog
-            </Text>
-          </View>
-        </View>
+        <TouchableOpacity
+          style={[
+            styles.backButton,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            theme.shadows.sm,
+          ]}
+          onPress={onBackToHome}
+          activeOpacity={0.7}
+        >
+          <Icon name="arrow-left" size={18} color={theme.textPrimary} />
+        </TouchableOpacity>
+
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
+          Model Studio
+        </Text>
 
         <TouchableOpacity
           style={[
             styles.chatShortcutBtn,
-            { backgroundColor: theme.accent },
+            { backgroundColor: theme.floatingNav },
             theme.shadows.sm,
           ]}
           onPress={onOpenChat}
@@ -117,45 +114,138 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* 2. Top Filter Tabs */}
+      {/* 2. Top Metric Cards (Matching "Humidity 45%" & "Temperature 28°C" in Reference UI) */}
+      <View style={styles.topMetricsRow}>
+        <View
+          style={[
+            styles.metricCard,
+            {
+              backgroundColor: theme.pastels.purple.bg,
+              borderColor: theme.pastels.purple.border,
+            },
+            theme.shadows.sm,
+          ]}
+        >
+          <Text style={[styles.metricLabel, { color: theme.pastels.purple.text }]}>
+            Parameters
+          </Text>
+          <Text style={[styles.metricValue, { color: theme.textPrimary }]}>
+            {activeModel.parameters || '1.2B'}
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.metricCard,
+            {
+              backgroundColor: theme.pastels.blue.bg,
+              borderColor: theme.pastels.blue.border,
+            },
+            theme.shadows.sm,
+          ]}
+        >
+          <Text style={[styles.metricLabel, { color: theme.pastels.blue.text }]}>
+            Weights Size
+          </Text>
+          <Text style={[styles.metricValue, { color: theme.textPrimary }]}>
+            {activeModel.sizeMb} <Text style={styles.metricUnit}>MB</Text>
+          </Text>
+        </View>
+      </View>
+
+      {/* 3. Circular Parameter Control Dial (Matching Center Arc Dial in Reference UI) */}
       <View
         style={[
-          styles.tabsBar,
-          { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder },
+          styles.dialCard,
+          { backgroundColor: theme.card, borderColor: theme.cardBorder },
+          theme.shadows.md,
         ]}
       >
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
+        <Text style={[styles.dialSubtitle, { color: theme.textMuted }]}>
+          SAMPLING TEMPERATURE
+        </Text>
+
+        <View style={styles.dialArcContainer}>
+          {/* Circular gradient arc ring */}
+          <View style={styles.dialRing}>
+            <View style={[styles.dialInner, { backgroundColor: theme.backgroundSecondary }]}>
+              <Text style={[styles.dialCenterNumber, { color: theme.textPrimary }]}>
+                {temperature.toFixed(2)}
+              </Text>
+              <Text style={[styles.dialCenterLabel, { color: theme.accent }]}>
+                {temperature <= 0.3 ? 'Deterministic' : temperature <= 0.7 ? 'Balanced' : 'Creative'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Temperature Stepper Buttons */}
+        <View style={styles.stepperRow}>
+          {[0.2, 0.5, 0.7, 0.9].map((temp) => (
+            <TouchableOpacity
+              key={temp}
+              style={[
+                styles.stepperPill,
+                temperature === temp
+                  ? [styles.stepperPillActive, { backgroundColor: theme.floatingNav }]
+                  : [styles.stepperPillInactive, { backgroundColor: theme.backgroundSecondary }],
+              ]}
+              onPress={() => setTemperature(temp)}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.stepperPillText,
+                  { color: temperature === temp ? '#ffffff' : theme.textPrimary },
+                ]}
+              >
+                {temp === 0.2 ? 'Precise (0.2)' : temp === 0.5 ? 'Code (0.5)' : temp === 0.7 ? 'Chat (0.7)' : 'Creative (0.9)'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* 4. Category Filter Tabs */}
+      <View style={styles.categorySection}>
+        <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
+          CERTIFIED SLM CATALOG
+        </Text>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScroll}
+        >
           {[
             { id: 'all', label: 'All Models' },
             { id: 'installed', label: 'Ready / Installed' },
-            { id: 'small', label: 'Compact (< 1GB)' },
-            { id: 'large', label: 'High Capacity (3B+)' },
-          ].map((tab) => {
-            const isSelected = activeTab === tab.id;
+            { id: 'compact', label: 'Compact (< 1GB)' },
+            { id: 'high_capacity', label: 'High Capacity (3B+)' },
+          ].map((cat) => {
+            const isSelected = activeCategory === cat.id;
             return (
               <TouchableOpacity
-                key={tab.id}
+                key={cat.id}
                 style={[
-                  styles.tabButton,
-                  isSelected && [
-                    styles.tabButtonActive,
-                    { backgroundColor: theme.card, borderColor: theme.cardBorder },
-                    theme.shadows.sm,
-                  ],
+                  styles.categoryPill,
+                  isSelected
+                    ? [styles.categoryPillActive, { backgroundColor: theme.floatingNav }, theme.shadows.sm]
+                    : [styles.categoryPillInactive, { backgroundColor: theme.card, borderColor: theme.cardBorder }],
                 ]}
-                onPress={() => setActiveTab(tab.id as ModelTab)}
+                onPress={() => setActiveCategory(cat.id as ModelCategory)}
                 activeOpacity={0.7}
               >
                 <Text
                   style={[
-                    styles.tabButtonText,
+                    styles.categoryText,
                     {
-                      color: isSelected ? theme.textPrimary : theme.textMuted,
-                      fontWeight: isSelected ? '700' : '500',
+                      color: isSelected ? '#ffffff' : theme.textPrimary,
+                      fontWeight: isSelected ? '700' : '600',
                     },
                   ]}
                 >
-                  {tab.label}
+                  {cat.label}
                 </Text>
               </TouchableOpacity>
             );
@@ -163,7 +253,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         </ScrollView>
       </View>
 
-      {/* 3. Search Bar */}
+      {/* 5. Search Bar */}
       <View
         style={[
           styles.searchBar,
@@ -182,7 +272,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         />
       </View>
 
-      {/* 4. Models List */}
+      {/* 6. Models Cards List */}
       <View style={styles.modelsList}>
         {filteredModels.map((model) => {
           const isSelected = model.id === activeModel.id;
@@ -200,7 +290,6 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                 theme.shadows.sm,
               ]}
             >
-              {/* Card Header */}
               <View style={styles.cardHeader}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.titleRow}>
@@ -235,12 +324,12 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
               {/* Specs Grid */}
               <View style={[styles.specsGrid, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
                 <View style={styles.specBox}>
-                  <Text style={[styles.specLabel, { color: theme.textMuted }]}>FILE SIZE</Text>
+                  <Text style={[styles.specLabel, { color: theme.textMuted }]}>SIZE</Text>
                   <Text style={[styles.specVal, { color: theme.textPrimary }]}>{model.sizeMb} MB</Text>
                 </View>
                 <View style={styles.specBox}>
                   <Text style={[styles.specLabel, { color: theme.textMuted }]}>CONTEXT</Text>
-                  <Text style={[styles.specVal, { color: theme.textPrimary }]}>{model.contextLength} tokens</Text>
+                  <Text style={[styles.specVal, { color: theme.textPrimary }]}>{model.contextLength} ctx</Text>
                 </View>
                 <View style={styles.specBox}>
                   <Text style={[styles.specLabel, { color: theme.textMuted }]}>CAPABILITY</Text>
@@ -274,7 +363,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                   <TouchableOpacity
                     style={[
                       styles.loadButton,
-                      { backgroundColor: theme.accent },
+                      { backgroundColor: theme.floatingNav },
                       theme.shadows.sm,
                     ]}
                     onPress={() => handleSelect(model)}
@@ -298,80 +387,166 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 14 : 18,
-    paddingBottom: 36,
+    paddingBottom: 110,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    marginBottom: 20,
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mainTitle: {
-    fontSize: 20,
+  headerTitle: {
+    fontSize: 18,
     fontWeight: '800',
-  },
-  mainSubtitle: {
-    fontSize: 11,
-    marginTop: 1,
+    letterSpacing: -0.3,
   },
   chatShortcutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
   },
   chatShortcutText: {
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '700',
   },
-  tabsBar: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 3,
-    marginBottom: 12,
-  },
-  tabsScroll: {
+  topMetricsRow: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 12,
+    marginBottom: 20,
   },
-  tabButton: {
-    paddingHorizontal: 14,
+  metricCard: {
+    flex: 1,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    padding: 16,
+  },
+  metricLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  metricValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  metricUnit: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dialCard: {
+    borderRadius: 26,
+    borderWidth: 1,
+    padding: 22,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  dialSubtitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 16,
+  },
+  dialArcContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  dialRing: {
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    borderWidth: 8,
+    borderColor: '#38bdf8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#38bdf8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  dialInner: {
+    width: 136,
+    height: 136,
+    borderRadius: 68,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialCenterNumber: {
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  dialCenterLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  stepperPill: {
+    paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 9,
+    borderRadius: 16,
   },
-  tabButtonActive: {
+  stepperPillActive: {},
+  stepperPillInactive: {},
+  stepperPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  categorySection: {
+    marginBottom: 14,
+  },
+  sectionHeading: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  categoryScroll: {
+    gap: 8,
+  },
+  categoryPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 18,
+  },
+  categoryPillActive: {},
+  categoryPillInactive: {
     borderWidth: 1,
   },
-  tabButtonText: {
+  categoryText: {
     fontSize: 12,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    borderRadius: 12,
+    borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 18,
   },
   searchInput: {
     flex: 1,
@@ -379,12 +554,12 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   modelsList: {
-    gap: 12,
+    gap: 14,
   },
   modelCard: {
-    borderRadius: 16,
+    borderRadius: 22,
     borderWidth: 1,
-    padding: 16,
+    padding: 18,
   },
   modelCardSelected: {
     borderWidth: 1.5,
@@ -401,8 +576,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modelName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
+    letterSpacing: -0.2,
   },
   activePill: {
     flexDirection: 'row',
@@ -424,13 +600,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   modelPublisher: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
   },
   formatBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   formatBadgeText: {
     fontSize: 10,
@@ -439,15 +615,15 @@ const styles = StyleSheet.create({
   modelDesc: {
     fontSize: 12,
     lineHeight: 16,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   specsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    padding: 10,
-    marginBottom: 12,
+    padding: 12,
+    marginBottom: 14,
   },
   specBox: {
     alignItems: 'center',
@@ -474,29 +650,29 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   capChip: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   capChipText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
   },
   loadButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 9,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
   },
   loadButtonActive: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 9,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
     borderWidth: 1,
   },
   loadButtonTextWhite: {

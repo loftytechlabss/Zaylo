@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Switch,
 } from 'react-native';
 import type { Theme } from '../theme/theme';
 import type {
@@ -33,32 +34,7 @@ interface HomeViewProps {
   onToggleTheme: () => void;
 }
 
-const QUICK_ACTIONS = [
-  {
-    iconName: 'code',
-    title: 'Code Generation',
-    desc: 'Write clean algorithms, handlers, or unit tests',
-    prompt: 'Write an asynchronous LRU Cache in TypeScript with full type safety and comments.',
-  },
-  {
-    iconName: 'file-text',
-    title: 'Technical Summary',
-    desc: 'Analyze documentation and architectural trade-offs',
-    prompt: 'Summarize the key differences between LoRA and QLoRA fine-tuning methods.',
-  },
-  {
-    iconName: 'terminal',
-    title: 'System Debugging',
-    desc: 'Inspect error logs and resolve runtime exceptions',
-    prompt: 'Help me debug a network connection timeout issue in a Node.js client.',
-  },
-  {
-    iconName: 'help-circle',
-    title: 'Concept Breakdown',
-    desc: 'Explain advanced algorithms in simple terms',
-    prompt: 'Explain how vector embeddings and cosine similarity search work.',
-  },
-];
+type WorkspaceFilter = 'overview' | 'on_device' | 'desktop' | 'models';
 
 export const HomeView: React.FC<HomeViewProps> = ({
   theme,
@@ -72,7 +48,29 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenMemoryModal,
   onToggleTheme,
 }) => {
+  const [activeFilter, setActiveFilter] = useState<WorkspaceFilter>('overview');
   const isDesktop = mode === 'desktop';
+
+  // Local switch states matching reference UI
+  const [localEngineEnabled, setLocalEngineEnabled] = useState(true);
+  const [desktopSyncEnabled, setDesktopSyncEnabled] = useState(desktopHost.isConnected);
+  const [autoOffloadEnabled, setAutoOffloadEnabled] = useState(true);
+  const [telemetryEnabled, setTelemetryEnabled] = useState(true);
+
+  const handleToggleLocalSwitch = (val: boolean) => {
+    setLocalEngineEnabled(val);
+    if (val) onToggleMode('on_device');
+  };
+
+  const handleToggleDesktopSwitch = (val: boolean) => {
+    setDesktopSyncEnabled(val);
+    if (val) {
+      onToggleMode('desktop');
+      if (!desktopHost.isConnected) onOpenPairingModal();
+    } else {
+      onToggleMode('on_device');
+    }
+  };
 
   return (
     <ScrollView
@@ -80,446 +78,382 @@ export const HomeView: React.FC<HomeViewProps> = ({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* 1. Header with Official Geometric Z Logo & Theme Switcher */}
+      {/* 1. Header: "Welcome Home, Alex" Style */}
       <View style={styles.headerRow}>
-        <View style={styles.brandGroup}>
-          <ZLogo
-            size={30}
-            variant={theme.isDark ? 'white' : 'dark'}
-            withContainer
-            containerBg={theme.isDark ? '#1a1d26' : '#f1f5f9'}
-            containerStyle={{
-              borderWidth: 1,
-              borderColor: theme.cardBorder,
-            }}
-          />
-          <View style={styles.brandTextContainer}>
-            <View style={styles.brandTitleRow}>
-              <Text style={[styles.brandTitle, { color: theme.textPrimary }]}>ZAYLO</Text>
-              <View
-                style={[
-                  styles.brandPill,
-                  {
-                    backgroundColor: theme.accentLight,
-                    borderColor: theme.cardBorder,
-                  },
-                ]}
-              >
-                <Text style={[styles.brandPillText, { color: theme.accent }]}>AI STUDIO</Text>
-              </View>
-            </View>
-            <Text style={[styles.brandSubtitle, { color: theme.textMuted }]}>
-              Local Inference & Desktop Server
-            </Text>
-          </View>
+        <View>
+          <Text style={[styles.welcomeGreeting, { color: theme.textPrimary }]}>
+            Welcome to
+          </Text>
+          <Text style={[styles.welcomeName, { color: theme.textPrimary }]}>
+            Zaylo Studio
+          </Text>
         </View>
 
-        <TouchableOpacity
-          style={[
-            styles.themeButton,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            theme.shadows.sm,
-          ]}
-          onPress={onToggleTheme}
-          activeOpacity={0.7}
-        >
-          <Icon
-            name={theme.isDark ? 'sun' : 'moon'}
-            size={18}
-            color={theme.accent}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* 2. Zaylo Overview Dashboard Card (Desktop Style) */}
-      <View
-        style={[
-          styles.overviewCard,
-          {
-            backgroundColor: theme.card,
-            borderColor: theme.cardBorder,
-          },
-          theme.shadows.sm,
-        ]}
-      >
-        {/* Runtime Header */}
-        <View style={styles.overviewTopRow}>
-          <View>
-            <Text style={[styles.sectionOverline, { color: theme.textMuted }]}>
-              INFERENCE RUNTIME
-            </Text>
-            <Text style={[styles.sectionHeading, { color: theme.textPrimary }]}>
-              {isDesktop ? 'Zaylo Desktop Server' : 'Local Inference Engine'}
-            </Text>
-          </View>
-
-          <View
+        <View style={styles.headerRight}>
+          <TouchableOpacity
             style={[
-              styles.statusBadge,
-              {
-                backgroundColor: isDesktop
-                  ? desktopHost.isConnected
-                    ? theme.successLight
-                    : 'rgba(239, 68, 68, 0.1)'
-                  : theme.successLight,
-                borderColor: isDesktop
-                  ? desktopHost.isConnected
-                    ? theme.success
-                    : theme.danger
-                  : theme.success,
-              },
+              styles.avatarButton,
+              { backgroundColor: theme.card, borderColor: theme.cardBorder },
+              theme.shadows.sm,
             ]}
+            onPress={onToggleTheme}
+            activeOpacity={0.8}
           >
+            <ZLogo size={24} variant={theme.isDark ? 'white' : 'dark'} />
             <View
               style={[
-                styles.statusDot,
-                {
-                  backgroundColor: isDesktop
-                    ? desktopHost.isConnected
-                      ? theme.success
-                      : theme.danger
-                    : theme.success,
-                },
+                styles.avatarDot,
+                { backgroundColor: theme.success },
               ]}
             />
-            <Text
-              style={[
-                styles.statusBadgeText,
-                {
-                  color: isDesktop
-                    ? desktopHost.isConnected
-                      ? theme.success
-                      : theme.danger
-                    : theme.success,
-                },
-              ]}
-            >
-              {isDesktop
-                ? desktopHost.isConnected
-                  ? 'Connected'
-                  : 'Host Offline'
-                : 'Online'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Runtime Mode Switcher */}
-        <View
-          style={[
-            styles.modeSwitcher,
-            {
-              backgroundColor: theme.backgroundSecondary,
-              borderColor: theme.cardBorder,
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={[
-              styles.modeTab,
-              !isDesktop && [
-                styles.modeTabActive,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.cardBorder,
-                },
-                theme.shadows.sm,
-              ],
-            ]}
-            onPress={() => onToggleMode('on_device')}
-            activeOpacity={0.8}
-          >
-            <Icon
-              name="cpu"
-              size={15}
-              color={!isDesktop ? theme.accent : theme.textMuted}
-            />
-            <Text
-              style={[
-                styles.modeTabLabel,
-                { color: !isDesktop ? theme.textPrimary : theme.textMuted },
-              ]}
-            >
-              On-Device Model
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.modeTab,
-              isDesktop && [
-                styles.modeTabActive,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.cardBorder,
-                },
-                theme.shadows.sm,
-              ],
-            ]}
-            onPress={() => onToggleMode('desktop')}
-            activeOpacity={0.8}
-          >
-            <Icon
-              name="monitor"
-              size={15}
-              color={isDesktop ? theme.accent : theme.textMuted}
-            />
-            <Text
-              style={[
-                styles.modeTabLabel,
-                { color: isDesktop ? theme.textPrimary : theme.textMuted },
-              ]}
-            >
-              Desktop Host :8080
-            </Text>
           </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Loaded Model Info Block */}
-        <View
-          style={[
-            styles.loadedModelBlock,
-            {
-              backgroundColor: theme.backgroundSecondary,
-              borderColor: theme.cardBorder,
-            },
-          ]}
+      {/* 2. Workspace Filter Pills (Matching "Rooms" in Reference UI) */}
+      <View style={styles.filterSection}>
+        <Text style={[styles.sectionTitleLabel, { color: theme.textMuted }]}>
+          Workspace
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
         >
-          <View style={styles.loadedModelRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.loadedModelLabel, { color: theme.textMuted }]}>
-                {isDesktop ? 'DESKTOP MODEL' : 'ACTIVE MODEL'}
-              </Text>
-              <Text
-                style={[styles.loadedModelName, { color: theme.textPrimary }]}
-                numberOfLines={1}
+          {[
+            { id: 'overview', label: 'All Engines', icon: 'grid' },
+            { id: 'on_device', label: 'On-Device', icon: 'cpu' },
+            { id: 'desktop', label: 'Desktop Host', icon: 'monitor' },
+            { id: 'models', label: 'Model Library', icon: 'layers' },
+          ].map((item) => {
+            const isSelected = activeFilter === item.id;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.filterCard,
+                  isSelected
+                    ? [
+                        styles.filterCardActive,
+                        { backgroundColor: theme.floatingNav },
+                        theme.shadows.md,
+                      ]
+                    : [
+                        styles.filterCardInactive,
+                        { backgroundColor: theme.card, borderColor: theme.cardBorder },
+                        theme.shadows.sm,
+                      ],
+                ]}
+                onPress={() => {
+                  setActiveFilter(item.id as WorkspaceFilter);
+                  if (item.id === 'models') onOpenModelModal();
+                  else if (item.id === 'desktop') onToggleMode('desktop');
+                  else if (item.id === 'on_device') onToggleMode('on_device');
+                }}
+                activeOpacity={0.8}
               >
-                {isDesktop
-                  ? desktopHost.isConnected
-                    ? desktopHost.activeModelName || 'Desktop Model'
-                    : 'Pair Zaylo Desktop Host'
-                  : activeLocalModel.name}
-              </Text>
+                <View
+                  style={[
+                    styles.filterIconCircle,
+                    isSelected
+                      ? { backgroundColor: 'rgba(255, 255, 255, 0.15)' }
+                      : { backgroundColor: theme.backgroundSecondary },
+                  ]}
+                >
+                  <Icon
+                    name={item.icon}
+                    size={16}
+                    color={isSelected ? '#ffffff' : theme.textPrimary}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.filterLabel,
+                    {
+                      color: isSelected ? '#ffffff' : theme.textPrimary,
+                      fontWeight: isSelected ? '700' : '600',
+                    },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* 3. Smart Systems: 2x2 Pastel Cards Grid with Toggles (Matching Reference UI) */}
+      <View style={styles.systemsSection}>
+        <Text style={[styles.sectionTitleLabel, { color: theme.textMuted }]}>
+          Inference Systems
+        </Text>
+
+        <View style={styles.systemsGrid}>
+          {/* Card 1: Local Engine (Soft Sky Blue) */}
+          <View
+            style={[
+              styles.pastelCard,
+              {
+                backgroundColor: theme.pastels.blue.bg,
+                borderColor: theme.pastels.blue.border,
+              },
+              theme.shadows.sm,
+            ]}
+          >
+            <View style={styles.pastelCardTop}>
+              <View
+                style={[
+                  styles.geometricIconBox,
+                  { backgroundColor: theme.pastels.blue.iconBg },
+                ]}
+              >
+                <Icon name="cpu" size={20} color="#ffffff" />
+              </View>
+              <Switch
+                value={localEngineEnabled}
+                onValueChange={handleToggleLocalSwitch}
+                trackColor={{ false: '#cbd5e1', true: theme.pastels.blue.text }}
+                thumbColor="#ffffff"
+                ios_backgroundColor="#cbd5e1"
+              />
             </View>
 
             <TouchableOpacity
-              onPress={isDesktop ? onOpenPairingModal : onOpenModelModal}
-              style={[
-                styles.changeModelBtn,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.cardBorder,
-                },
-                theme.shadows.sm,
-              ]}
+              onPress={() => {
+                onToggleMode('on_device');
+                onOpenModelModal();
+              }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.changeModelBtnText, { color: theme.accent }]}>
-                {isDesktop ? 'Configure Host' : 'Change Model'}
+              <Text style={[styles.pastelCardTitle, { color: theme.textPrimary }]}>
+                Local LLM
               </Text>
-              <Icon name="chevron-right" size={13} color={theme.accent} />
+              <Text style={[styles.pastelCardSubtitle, { color: theme.pastels.blue.text }]}>
+                {activeLocalModel.name}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Card 2: Desktop Gateway (Soft Lavender / Purple) */}
+          <View
+            style={[
+              styles.pastelCard,
+              {
+                backgroundColor: theme.pastels.purple.bg,
+                borderColor: theme.pastels.purple.border,
+              },
+              theme.shadows.sm,
+            ]}
+          >
+            <View style={styles.pastelCardTop}>
+              <View
+                style={[
+                  styles.geometricIconBox,
+                  { backgroundColor: theme.pastels.purple.iconBg },
+                ]}
+              >
+                <Icon name="monitor" size={20} color="#ffffff" />
+              </View>
+              <Switch
+                value={desktopSyncEnabled}
+                onValueChange={handleToggleDesktopSwitch}
+                trackColor={{ false: '#cbd5e1', true: theme.pastels.purple.text }}
+                thumbColor="#ffffff"
+                ios_backgroundColor="#cbd5e1"
+              />
+            </View>
+
+            <TouchableOpacity
+              onPress={() => {
+                onToggleMode('desktop');
+                onOpenPairingModal();
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.pastelCardTitle, { color: theme.textPrimary }]}>
+                Desktop Host
+              </Text>
+              <Text style={[styles.pastelCardSubtitle, { color: theme.pastels.purple.text }]}>
+                {desktopHost.isConnected ? 'Port :8080 Active' : 'Tap to Pair Host'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Card 3: Model Studio (Soft Golden Amber) */}
+          <View
+            style={[
+              styles.pastelCard,
+              {
+                backgroundColor: theme.pastels.yellow.bg,
+                borderColor: theme.pastels.yellow.border,
+              },
+              theme.shadows.sm,
+            ]}
+          >
+            <View style={styles.pastelCardTop}>
+              <View
+                style={[
+                  styles.geometricIconBox,
+                  { backgroundColor: theme.pastels.yellow.iconBg },
+                ]}
+              >
+                <Icon name="layers" size={20} color="#ffffff" />
+              </View>
+              <Switch
+                value={autoOffloadEnabled}
+                onValueChange={setAutoOffloadEnabled}
+                trackColor={{ false: '#cbd5e1', true: theme.pastels.yellow.text }}
+                thumbColor="#ffffff"
+                ios_backgroundColor="#cbd5e1"
+              />
+            </View>
+
+            <TouchableOpacity onPress={onOpenModelModal} activeOpacity={0.7}>
+              <Text style={[styles.pastelCardTitle, { color: theme.textPrimary }]}>
+                Model Library
+              </Text>
+              <Text style={[styles.pastelCardSubtitle, { color: theme.pastels.yellow.text }]}>
+                7 Certified GGUFs
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Card 4: Hardware Telemetry (Soft Mint Green) */}
+          <View
+            style={[
+              styles.pastelCard,
+              {
+                backgroundColor: theme.pastels.green.bg,
+                borderColor: theme.pastels.green.border,
+              },
+              theme.shadows.sm,
+            ]}
+          >
+            <View style={styles.pastelCardTop}>
+              <View
+                style={[
+                  styles.geometricIconBox,
+                  { backgroundColor: theme.pastels.green.iconBg },
+                ]}
+              >
+                <Icon name="activity" size={20} color="#ffffff" />
+              </View>
+              <Switch
+                value={telemetryEnabled}
+                onValueChange={setTelemetryEnabled}
+                trackColor={{ false: '#cbd5e1', true: theme.pastels.green.text }}
+                thumbColor="#ffffff"
+                ios_backgroundColor="#cbd5e1"
+              />
+            </View>
+
+            <TouchableOpacity onPress={onOpenMemoryModal} activeOpacity={0.7}>
+              <Text style={[styles.pastelCardTitle, { color: theme.textPrimary }]}>
+                Telemetry & IP
+              </Text>
+              <Text style={[styles.pastelCardSubtitle, { color: theme.pastels.green.text }]}>
+                LAN Node Ready
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
 
-      {/* 3. Primary Prompt Action Launcher */}
+      {/* 4. Primary Chat Launch Banner (Matching Middle Screen "Start ->" Hero) */}
       <TouchableOpacity
         style={[
-          styles.startChatBanner,
+          styles.startHeroBanner,
           {
             backgroundColor: theme.card,
             borderColor: theme.cardBorder,
           },
-          theme.shadows.sm,
+          theme.shadows.md,
         ]}
         onPress={() => onOpenChat()}
         activeOpacity={0.85}
       >
-        <View style={styles.startChatLeft}>
-          <View
-            style={[
-              styles.startChatIconBox,
-              { backgroundColor: theme.accentLight },
-            ]}
-          >
-            <Icon name="message-square" size={19} color={theme.accent} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.startChatTitle, { color: theme.textPrimary }]}>
-              Start New Conversation
-            </Text>
-            <Text style={[styles.startChatSubtitle, { color: theme.textMuted }]}>
-              Run prompts locally or stream from Desktop server
-            </Text>
-          </View>
+        <View style={styles.startHeroLeft}>
+          <Text style={[styles.startHeroTitle, { color: theme.textPrimary }]}>
+            Start New Session
+          </Text>
+          <Text style={[styles.startHeroDesc, { color: theme.textMuted }]}>
+            {isDesktop
+              ? 'Streaming from Zaylo Desktop gateway'
+              : 'Zero-cloud execution on local hardware'}
+          </Text>
         </View>
+
         <View
           style={[
-            styles.startChatArrow,
-            { backgroundColor: theme.accent },
+            styles.startCircleBtn,
+            { backgroundColor: theme.floatingNav },
+            theme.shadows.md,
           ]}
         >
-          <Icon name="arrow-right" size={16} color="#ffffff" />
+          <Text style={styles.startCircleText}>Start</Text>
+          <Icon name="arrow-right" size={14} color="#ffffff" />
         </View>
       </TouchableOpacity>
 
-      {/* 4. Core Workspaces 4-Grid */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
-          Workspaces
+      {/* 5. Clean Quick Tasks */}
+      <View style={styles.tasksSection}>
+        <Text style={[styles.sectionTitleLabel, { color: theme.textMuted }]}>
+          Quick Tasks
         </Text>
-        <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
-          Local developer tools
-        </Text>
-      </View>
 
-      <View style={styles.gridContainer}>
-        <TouchableOpacity
-          style={[
-            styles.gridCard,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            theme.shadows.sm,
-          ]}
-          onPress={() => onOpenChat()}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.gridIconCircle,
-              { backgroundColor: theme.accentLight },
-            ]}
-          >
-            <Icon name="message-square" size={18} color={theme.accent} />
-          </View>
-          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>
-            Chat Studio
-          </Text>
-          <Text style={[styles.gridDesc, { color: theme.textMuted }]}>
-            Interactive chat with active LLM weights
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.gridCard,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            theme.shadows.sm,
-          ]}
-          onPress={onOpenModelModal}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.gridIconCircle,
-              { backgroundColor: theme.accentLight },
-            ]}
-          >
-            <Icon name="cpu" size={18} color={theme.accent} />
-          </View>
-          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>
-            Model Studio
-          </Text>
-          <Text style={[styles.gridDesc, { color: theme.textMuted }]}>
-            Browse Llama, Qwen, Mistral & DeepSeek
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.gridCard,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            theme.shadows.sm,
-          ]}
-          onPress={onOpenPairingModal}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.gridIconCircle,
-              { backgroundColor: theme.successLight },
-            ]}
-          >
-            <Icon name="monitor" size={18} color={theme.success} />
-          </View>
-          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>
-            Desktop Gateway
-          </Text>
-          <Text style={[styles.gridDesc, { color: theme.textMuted }]}>
-            Pair with Fastify Host on local Wi-Fi
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.gridCard,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            theme.shadows.sm,
-          ]}
-          onPress={onOpenMemoryModal}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.gridIconCircle,
-              { backgroundColor: theme.accentLight },
-            ]}
-          >
-            <Icon name="activity" size={18} color={theme.accent} />
-          </View>
-          <Text style={[styles.gridTitle, { color: theme.textPrimary }]}>
-            Telemetry & Info
-          </Text>
-          <Text style={[styles.gridDesc, { color: theme.textMuted }]}>
-            Client runtime specs & connection health
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* 5. Prompt Starters */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
-          Prompt Starters
-        </Text>
-        <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
-          Tap any card to launch immediately
-        </Text>
-      </View>
-
-      <View style={styles.promptsList}>
-        {QUICK_ACTIONS.map((item, idx) => (
-          <TouchableOpacity
-            key={idx}
-            style={[
-              styles.promptCard,
-              {
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-              },
-              theme.shadows.sm,
-            ]}
-            onPress={() => onOpenChat(item.prompt)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.promptCardTop}>
-              <View style={styles.promptIconTitle}>
-                <View
-                  style={[
-                    styles.promptIconBox,
-                    { backgroundColor: theme.accentLight },
-                  ]}
-                >
-                  <Icon name={item.iconName} size={15} color={theme.accent} />
-                </View>
-                <Text style={[styles.promptTitle, { color: theme.textPrimary }]}>
-                  {item.title}
+        <View style={styles.tasksList}>
+          {[
+            {
+              title: 'Explain Quantum Computing',
+              desc: 'High-level architectural overview and qubits breakdown',
+              icon: 'zap',
+              color: theme.pastels.blue.text,
+              bg: theme.pastels.blue.bg,
+            },
+            {
+              title: 'Write a TypeScript API Route',
+              desc: 'Fastify endpoint with schema validation and error handler',
+              icon: 'code',
+              color: theme.pastels.purple.text,
+              bg: theme.pastels.purple.bg,
+            },
+            {
+              title: 'Review System Architecture',
+              desc: 'Trade-offs between on-device SLMs and centralized clusters',
+              icon: 'file-text',
+              color: theme.pastels.yellow.text,
+              bg: theme.pastels.yellow.bg,
+            },
+          ].map((task, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={[
+                styles.taskCard,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                },
+                theme.shadows.sm,
+              ]}
+              onPress={() => onOpenChat(task.title)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.taskIconBox, { backgroundColor: task.bg }]}>
+                <Icon name={task.icon} size={16} color={task.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.taskTitle, { color: theme.textPrimary }]}>
+                  {task.title}
+                </Text>
+                <Text style={[styles.taskDesc, { color: theme.textMuted }]}>
+                  {task.desc}
                 </Text>
               </View>
-            </View>
-            <Text style={[styles.promptDesc, { color: theme.textSecondary }]}>
-              {item.desc}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Icon name="chevron-right" size={16} color={theme.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     </ScrollView>
   );
@@ -530,263 +464,193 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 14 : 18,
-    paddingBottom: 36,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 16 : 22,
+    paddingBottom: 110, // Generous padding so floating island nav doesn't cover content
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
   },
-  brandGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  brandTextContainer: {
-    gap: 2,
-  },
-  brandTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  brandTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-  },
-  brandPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  brandPillText: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
-  brandSubtitle: {
-    fontSize: 11,
+  welcomeGreeting: {
+    fontSize: 16,
     fontWeight: '500',
+    letterSpacing: -0.2,
   },
-  themeButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  welcomeName: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginTop: 2,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatarButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
-  overviewCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 16,
+  avatarDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
-  overviewTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  sectionOverline: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    marginBottom: 2,
-  },
-  sectionHeading: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  statusBadgeText: {
-    fontSize: 11,
+  sectionTitleLabel: {
+    fontSize: 14,
     fontWeight: '700',
-  },
-  modeSwitcher: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 3,
     marginBottom: 12,
   },
-  modeTab: {
-    flex: 1,
+  filterSection: {
+    marginBottom: 24,
+  },
+  filterScroll: {
+    gap: 10,
+  },
+  filterCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 9,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
   },
-  modeTabActive: {
+  filterCardActive: {
+    transform: [{ scale: 1.02 }],
+  },
+  filterCardInactive: {
     borderWidth: 1,
   },
-  modeTabLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  loadedModelBlock: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-  },
-  loadedModelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  loadedModelLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  loadedModelName: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  changeModelBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  changeModelBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  startChatBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 20,
-  },
-  startChatLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-    marginRight: 8,
-  },
-  startChatIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  startChatTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  startChatSubtitle: {
-    fontSize: 11,
-  },
-  startChatArrow: {
+  filterIconCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionHeaderRow: {
-    marginBottom: 10,
+  filterLabel: {
+    fontSize: 13,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+  systemsSection: {
+    marginBottom: 24,
   },
-  sectionSubtitle: {
-    fontSize: 11,
-    marginTop: 1,
-  },
-  gridContainer: {
+  systemsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 20,
+    gap: 14,
   },
-  gridCard: {
-    width: '48%',
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 12,
+  pastelCard: {
+    width: '47.8%',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    padding: 16,
+    minHeight: 140,
+    justifyContent: 'space-between',
   },
-  gridIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  gridTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 3,
-  },
-  gridDesc: {
-    fontSize: 10,
-    lineHeight: 14,
-  },
-  promptsList: {
-    gap: 8,
-    marginBottom: 18,
-  },
-  promptCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 12,
-  },
-  promptCardTop: {
+  pastelCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 16,
   },
-  promptIconTitle: {
+  geometricIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  pastelCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+    letterSpacing: -0.2,
+  },
+  pastelCardSubtitle: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  startHeroBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    borderRadius: 26,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 26,
   },
-  promptIconBox: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
+  startHeroLeft: {
+    flex: 1,
+    marginRight: 14,
+  },
+  startHeroTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  startHeroDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  startCircleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 24,
+  },
+  startCircleText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  tasksSection: {
+    marginBottom: 16,
+  },
+  tasksList: {
+    gap: 10,
+  },
+  taskCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+  },
+  taskIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  promptTitle: {
-    fontSize: 13,
+  taskTitle: {
+    fontSize: 14,
     fontWeight: '700',
+    marginBottom: 2,
   },
-  promptDesc: {
+  taskDesc: {
     fontSize: 11,
     lineHeight: 15,
   },

@@ -34,7 +34,6 @@ import { Icon } from './src/components/common/Icon';
 type ActiveScreen = 'home' | 'models' | 'chat';
 
 export default function App() {
-  // Theme state: defaults to White Theme (Zaylo Desktop style)
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const theme: Theme = useMemo(
     () => (themeMode === 'light' ? lightTheme : darkTheme),
@@ -44,7 +43,6 @@ export default function App() {
     setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  // Screen Navigation state (Defaults to Home Hub)
   const [activeScreen, setActiveScreen] = useState<ActiveScreen>('home');
   const screenFadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -53,28 +51,25 @@ export default function App() {
     Animated.sequence([
       Animated.timing(screenFadeAnim, {
         toValue: 0.2,
-        duration: 100,
+        duration: 90,
         useNativeDriver: true,
       }),
       Animated.timing(screenFadeAnim, {
         toValue: 1,
-        duration: 180,
+        duration: 160,
         useNativeDriver: true,
       }),
     ]).start();
     setActiveScreen(screen);
   };
 
-  // 1. Initial Device & Paging Profiling
   const initialProfile = useMemo(() => DeviceProfiler.profileDevice(), []);
   const [profile] = useState<DeviceMemoryProfile>(initialProfile);
 
-  // 2. Active Hybrid Mode & Chat State
   const [mode, setMode] = useState<HybridMode>('on_device');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
 
-  // 3. Desktop Host State
   const [desktopHost, setDesktopHost] = useState<DesktopHost>({
     url: 'http://192.168.1.100:8080',
     name: 'Zaylo Desktop Host',
@@ -82,7 +77,6 @@ export default function App() {
     activeModelName: 'Llama-3.2-1B-Instruct-Q4_K_M',
   });
 
-  // 4. On-Device Model & Memory Paging Config
   const [activeLocalModel, setActiveLocalModel] = useState<OnDeviceModel>(
     MOBILE_MODELS.find((m) => m.id === initialProfile.recommendedModelId) || MOBILE_MODELS[2]
   );
@@ -91,12 +85,10 @@ export default function App() {
     initialProfile.pagingConfig
   );
 
-  // 5. Active Modals
   const [memoryModalVisible, setMemoryModalVisible] = useState(false);
   const [pairingModalVisible, setPairingModalVisible] = useState(false);
   const [modelModalVisible, setModelModalVisible] = useState(false);
 
-  // 6. Router Setup
   const cancelStreamRef = useRef<(() => void) | null>(null);
 
   const router = useMemo(() => {
@@ -108,7 +100,6 @@ export default function App() {
     );
   }, [mode, desktopHost, activeLocalModel, pagingConfig]);
 
-  // 7. Message Handlers
   const handleSendMessage = async (text: string) => {
     if (activeScreen !== 'chat') {
       navigateToScreen('chat');
@@ -260,7 +251,6 @@ export default function App() {
 
         {activeScreen === 'chat' && (
           <View style={styles.chatScreenContainer}>
-            {/* Chat Dedicated Top Header */}
             <ChatHeader
               theme={theme}
               mode={mode}
@@ -272,7 +262,6 @@ export default function App() {
               onToggleTheme={toggleTheme}
             />
 
-            {/* Chat Messages Body */}
             <ChatView
               theme={theme}
               messages={messages}
@@ -281,7 +270,6 @@ export default function App() {
               onSelectPromptSuggestion={handleSendMessage}
             />
 
-            {/* Floating Message Input */}
             <MessageInput
               theme={theme}
               onSendMessage={handleSendMessage}
@@ -296,93 +284,82 @@ export default function App() {
         )}
       </Animated.View>
 
-      {/* Bottom Global Navigation Bar */}
+      {/* 5. Floating Island Bottom Navigation Bar (Matching Reference UI) */}
       <View
         style={[
-          styles.bottomNavBar,
-          {
-            backgroundColor: theme.card,
-            borderTopColor: theme.cardBorder,
-          },
-          theme.shadows.md,
+          styles.floatingNavBar,
+          { backgroundColor: theme.floatingNav },
+          theme.shadows.floating,
         ]}
       >
         <TouchableOpacity
-          style={[styles.navTab, activeScreen === 'home' && styles.navTabActive]}
+          style={[
+            styles.floatingTab,
+            activeScreen === 'home' && styles.floatingTabActive,
+          ]}
           onPress={() => navigateToScreen('home')}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
           <Icon
             name="home"
-            size={19}
-            color={activeScreen === 'home' ? theme.accent : theme.textMuted}
+            size={18}
+            color={activeScreen === 'home' ? '#ffffff' : theme.floatingNavText}
           />
-          <Text
-            style={[
-              styles.navTabLabel,
-              { color: activeScreen === 'home' ? theme.accent : theme.textMuted },
-            ]}
-          >
-            Home
-          </Text>
+          {activeScreen === 'home' && (
+            <Text style={styles.floatingTabActiveText}>Home</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.navTab, activeScreen === 'models' && styles.navTabActive]}
+          style={[
+            styles.floatingTab,
+            activeScreen === 'models' && styles.floatingTabActive,
+          ]}
           onPress={() => navigateToScreen('models')}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
           <Icon
             name="cpu"
-            size={19}
-            color={activeScreen === 'models' ? theme.accent : theme.textMuted}
+            size={18}
+            color={activeScreen === 'models' ? '#ffffff' : theme.floatingNavText}
           />
-          <Text
-            style={[
-              styles.navTabLabel,
-              { color: activeScreen === 'models' ? theme.accent : theme.textMuted },
-            ]}
-          >
-            Models
-          </Text>
+          {activeScreen === 'models' && (
+            <Text style={styles.floatingTabActiveText}>Models</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.navTab, activeScreen === 'chat' && styles.navTabActive]}
+          style={[
+            styles.floatingTab,
+            activeScreen === 'chat' && styles.floatingTabActive,
+          ]}
           onPress={() => navigateToScreen('chat')}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
           <Icon
             name="message-square"
-            size={19}
-            color={activeScreen === 'chat' ? theme.accent : theme.textMuted}
+            size={18}
+            color={activeScreen === 'chat' ? '#ffffff' : theme.floatingNavText}
           />
-          <Text
-            style={[
-              styles.navTabLabel,
-              { color: activeScreen === 'chat' ? theme.accent : theme.textMuted },
-            ]}
-          >
-            Chat
-          </Text>
+          {activeScreen === 'chat' && (
+            <Text style={styles.floatingTabActiveText}>Chat</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.navTab}
+          style={styles.floatingTab}
           onPress={() => setPairingModalVisible(true)}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <Icon name="monitor" size={19} color={theme.textMuted} />
-          <Text style={[styles.navTabLabel, { color: theme.textMuted }]}>Desktop</Text>
+          <Icon name="monitor" size={18} color={theme.floatingNavText} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.navTab}
+          style={styles.floatingTab}
           onPress={() => setMemoryModalVisible(true)}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <Icon name="server" size={19} color={theme.textMuted} />
-          <Text style={[styles.navTabLabel, { color: theme.textMuted }]}>System</Text>
+          <Icon name="activity" size={18} color={theme.floatingNavText} />
         </TouchableOpacity>
       </View>
 
@@ -428,28 +405,38 @@ const styles = StyleSheet.create({
   },
   chatScreenContainer: {
     flex: 1,
+    paddingBottom: 80, // Padding for floating nav island
   },
-  bottomNavBar: {
+  floatingNavBar: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 24 : 16,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 14 : 8,
-    borderTopWidth: 1,
+    borderRadius: 36,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    zIndex: 999,
   },
-  navTab: {
+  floatingTab: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
+    paddingVertical: 8,
     paddingHorizontal: 12,
-    gap: 4,
+    borderRadius: 24,
+    gap: 6,
   },
-  navTabActive: {
-    transform: [{ scale: 1.05 }],
+  floatingTabActive: {
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 16,
   },
-  navTabLabel: {
-    fontSize: 10,
+  floatingTabActiveText: {
+    color: '#ffffff',
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.2,
+    letterSpacing: -0.2,
   },
 });
