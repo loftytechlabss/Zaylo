@@ -14,6 +14,8 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "dev:desktop": "pnpm --filter @local-ai/desktop dev",
+    "dev:mobile": "pnpm --filter @local-ai/mobile start",
+    "mobile:web": "pnpm --filter @local-ai/mobile web",
     "cli": "pnpm --filter @local-ai/cli start",
     "dist": "turbo run build && pnpm --filter @local-ai/desktop dist",
     "dist:mac": "turbo run build && pnpm --filter @local-ai/desktop dist:mac",

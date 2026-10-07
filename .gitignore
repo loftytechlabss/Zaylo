@@ -14,3 +14,6 @@ build/
 .DS_Store
 .env
 .env.local
+Tofy
+.expo/
+.data-platform/
