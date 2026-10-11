@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -21,6 +21,8 @@ import type {
 import { DeviceProfiler, MOBILE_MODELS } from './src/engine/deviceProfiler';
 import { MobileMemoryPagingEngine } from './src/engine/memoryPaging';
 import { HybridRouter } from './src/engine/hybridRouter';
+import { DesktopClient } from './src/engine/desktopClient';
+import { getDefaultHostUrl } from './src/utils/networkHost';
 import { HomeView } from './src/components/HomeView';
 import { ModelsView } from './src/components/ModelsView';
 import { ChatHeader } from './src/components/ChatHeader';
@@ -142,11 +144,28 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState(false);
 
   const [desktopHost, setDesktopHost] = useState<DesktopHost>({
-    url: 'http://192.168.1.100:8080',
-    name: 'Zaylo Desktop Host',
+    url: getDefaultHostUrl(),
+    name: 'Zaylo Local Host',
     isConnected: false,
-    activeModelName: 'Llama-3.2-1B-Instruct-Q4_K_M',
+    activeModelName: 'Qwen 2.5 Coder 1.5B',
   });
+
+  // Automatically probe and connect to host on the local Wi-Fi network
+  useEffect(() => {
+    let isMounted = true;
+    DesktopClient.ping(desktopHost.url).then((res) => {
+      if (isMounted && res.ok) {
+        setDesktopHost((prev) => ({
+          ...prev,
+          isConnected: true,
+          activeModelName: res.activeModel || prev.activeModelName,
+        }));
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [desktopHost.url]);
 
   const [activeLocalModel, setActiveLocalModel] = useState<OnDeviceModel | null>(null);
 
@@ -172,6 +191,11 @@ export default function App() {
   const handleSendMessage = async (text: string) => {
     if (activeScreen !== 'chat') {
       navigateToScreen('chat');
+    }
+
+    if (cancelStreamRef.current) {
+      cancelStreamRef.current();
+      cancelStreamRef.current = null;
     }
 
     const userMessage: ChatMessage = {

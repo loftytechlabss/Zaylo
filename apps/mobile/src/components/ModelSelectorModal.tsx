@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ScrollView,
   Animated,
+  Alert,
 } from 'react-native';
 import { lightTheme, Theme } from '../theme/theme';
 import { ZAYLO_MODELS } from '../engine/modelsCatalog';
@@ -146,12 +147,24 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                     theme.shadows.sm,
                   ]}
                   onPress={() => {
-                    if (canRun && isDownloaded) {
-                      onSelectModel(convertedModel);
-                      handleClose();
+                    if (!isDownloaded) {
+                      Alert.alert(
+                        'Model Not Downloaded',
+                        `"${m.name}" is not downloaded yet. Please open the Catalog tab to download the weights first.`
+                      );
+                      return;
                     }
+                    if (!canRun) {
+                      Alert.alert(
+                        'Insufficient RAM',
+                        `"${m.name}" requires more memory than currently available on this device.`
+                      );
+                      return;
+                    }
+                    onSelectModel(convertedModel);
+                    handleClose();
                   }}
-                  activeOpacity={canRun && isDownloaded ? 0.7 : 1}
+                  activeOpacity={0.7}
                 >
                   <View style={styles.cardTopRow}>
                     <View style={{ flex: 1 }}>

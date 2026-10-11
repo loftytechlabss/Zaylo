@@ -19,6 +19,7 @@ import type {
 } from '../types';
 import { ZLogo } from './common/ZLogo';
 import { Icon } from './common/Icon';
+import { MobileAIEdgeServer, MobileServerStats } from '../engine/mobileServer';
 
 interface HomeViewProps {
   theme: Theme;
@@ -81,9 +82,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   // Local switch states matching reference UI
   const [localEngineEnabled, setLocalEngineEnabled] = useState(!!activeLocalModel);
-  const [desktopSyncEnabled, setDesktopSyncEnabled] = useState(desktopHost.isConnected);
   const [autoOffloadEnabled, setAutoOffloadEnabled] = useState(true);
   const [telemetryEnabled, setTelemetryEnabled] = useState(true);
+  const [serverStats, setServerStats] = useState<MobileServerStats>(() => MobileAIEdgeServer.getStats());
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return MobileAIEdgeServer.subscribe((stats) => {
+      setServerStats(stats);
+    });
+  }, []);
 
   const handleToggleLocalSwitch = (val: boolean) => {
     setLocalEngineEnabled(val);
@@ -96,13 +104,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }
   };
 
-  const handleToggleDesktopSwitch = (val: boolean) => {
-    setDesktopSyncEnabled(val);
+  const handleToggleServer = async (val: boolean) => {
     if (val) {
-      onToggleMode('desktop');
-      if (!desktopHost.isConnected) onOpenPairingModal();
+      const res = await MobileAIEdgeServer.startServer(8080);
+      if (!res.success) {
+        setServerError(res.message);
+      } else {
+        setServerError(null);
+      }
     } else {
-      onToggleMode('on_device');
+      await MobileAIEdgeServer.stopServer();
+      setServerError(null);
     }
   };
 
@@ -203,7 +215,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Card 2: Desktop Gateway (Soft Lavender / Purple) */}
+          {/* Card 2: AI Edge Server Node (Turn Phone into AI Server) */}
           <View
             style={[
               styles.pastelCard,
@@ -221,11 +233,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   { backgroundColor: theme.pastels.purple.iconBg },
                 ]}
               >
-                <Icon name="monitor" size={20} color="#ffffff" />
+                <Icon name="server" size={20} color="#ffffff" />
               </View>
               <Switch
-                value={desktopSyncEnabled}
-                onValueChange={handleToggleDesktopSwitch}
+                value={serverStats.isRunning}
+                onValueChange={handleToggleServer}
                 trackColor={{ false: '#cbd5e1', true: theme.pastels.purple.text }}
                 thumbColor="#ffffff"
                 ios_backgroundColor="#cbd5e1"
@@ -233,17 +245,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </View>
 
             <TouchableOpacity
-              onPress={() => {
-                onToggleMode('desktop');
-                onOpenPairingModal();
-              }}
+              onPress={() => handleToggleServer(!serverStats.isRunning)}
               activeOpacity={0.7}
             >
               <Text style={[styles.pastelCardTitle, { color: theme.textPrimary }]}>
-                Desktop Host
+                AI Server Node
               </Text>
-              <Text style={[styles.pastelCardSubtitle, { color: theme.pastels.purple.text }]}>
-                {desktopHost.isConnected ? 'Port :8080 Active' : 'Tap to Pair Host'}
+              <Text style={[styles.pastelCardSubtitle, { color: theme.pastels.purple.text }]} numberOfLines={1}>
+                {serverStats.isRunning ? `Online :${serverStats.port}` : 'Turn into AI Server'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -326,6 +335,48 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Live Mobile AI Server Node Status Banner */}
+        {serverStats.isRunning && (
+          <View
+            style={[
+              styles.serverNodeBanner,
+              { backgroundColor: theme.card, borderColor: theme.success },
+              theme.shadows.sm,
+            ]}
+          >
+            <View style={styles.serverNodeHeader}>
+              <View style={[styles.liveServerDot, { backgroundColor: theme.success }]} />
+              <Text style={[styles.serverNodeTitle, { color: theme.textPrimary }]}>
+                AI Node Active on Local Network
+              </Text>
+            </View>
+            <Text style={[styles.serverNodeUrl, { color: theme.success }]} numberOfLines={1}>
+              http://{serverStats.ip}:{serverStats.port}/v1/chat/completions
+            </Text>
+            <Text style={[styles.serverNodeDesc, { color: theme.textMuted }]}>
+              OpenAI-compatible endpoint. Send requests from your laptop, Cursor, or home automation!
+            </Text>
+            <View style={styles.serverMetricsRow}>
+              <Text style={[styles.serverMetricText, { color: theme.textSecondary }]}>
+                Requests: {serverStats.requestsServed} • Tokens: {serverStats.totalTokensGenerated} • Uptime: {serverStats.uptimeSeconds}s
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {serverError && (
+          <View
+            style={[
+              styles.serverNodeBanner,
+              { backgroundColor: '#fee2e2', borderColor: '#ef4444' },
+            ]}
+          >
+            <Text style={{ color: '#dc2626', fontSize: 13, fontWeight: '600' }}>
+              {serverError}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* 4. Primary Chat Launch Banner (Matching Middle Screen "Start ->" Hero) */}
@@ -595,5 +646,43 @@ const styles = StyleSheet.create({
   taskDesc: {
     fontSize: 11,
     lineHeight: 15,
+  },
+  serverNodeBanner: {
+    marginTop: 14,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 16,
+    gap: 6,
+  },
+  serverNodeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  liveServerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  serverNodeTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  serverNodeUrl: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  serverNodeDesc: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  serverMetricsRow: {
+    marginTop: 4,
+  },
+  serverMetricText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

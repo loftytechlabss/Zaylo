@@ -40,7 +40,9 @@ export class MobileMemoryPagingEngine {
     // Determine conservative RAM budget (max 65% of available RAM to avoid OS pressure)
     const ramBudgetMb = Math.floor(availableRamMb * 0.65);
 
-    if (model.id.includes('3b')) {
+    const modelId = model?.id || '';
+
+    if (modelId.includes('3b')) {
       // 3B Model Paging Strategy:
       // High-efficiency virtual memory paging (mmap) + 8-bit quantized KV cache + capped 2048 context
       const useMmap = true;
@@ -63,7 +65,7 @@ export class MobileMemoryPagingEngine {
       };
     }
 
-    if (model.id.includes('1b')) {
+    if (modelId.includes('1b')) {
       // 1B Model Paging Strategy:
       // Smooth performance on budget/mid-tier phones (~900MB total footprint)
       const contextWindow = availableRamMb < 2500 ? 1536 : 2048;
@@ -89,7 +91,7 @@ export class MobileMemoryPagingEngine {
       flashAttention: false,
       rollingContext: false,
       ramBudgetMb,
-      estimatedFootprintMb: model.id.includes('135m') ? 160 : 380,
+      estimatedFootprintMb: modelId.includes('135m') ? 160 : 380,
     };
   }
 

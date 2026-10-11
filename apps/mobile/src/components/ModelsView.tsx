@@ -8,11 +8,14 @@ import {
   StyleSheet,
   Platform,
   Animated,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import type { Theme } from '../theme/theme';
 import type { OnDeviceModel, DeviceMemoryProfile, MemoryPagingConfig, DownloadProgress } from '../types';
 import { ZAYLO_MODELS, ZayloModel } from '../engine/modelsCatalog';
 import { ModelStorage } from '../engine/modelStorage';
+import { OnDeviceEngine } from '../engine/onDeviceEngine';
 import { Icon } from './common/Icon';
 
 /**
@@ -68,6 +71,8 @@ type ModelCategory = 'all' | 'installed' | 'compact' | 'flagship' | 'reasoning';
 export const ModelsView: React.FC<ModelsViewProps> = ({
   theme,
   activeModel,
+  profile,
+  pagingConfig,
   onSelectModel,
   onBackToHome,
   onOpenChat,
@@ -78,18 +83,16 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     ModelStorage.getInstalledModelIds()
   );
   const [downloadProgressMap, setDownloadProgressMap] = useState<Record<string, DownloadProgress>>({});
-  const [availableStorageGb, setAvailableStorageGb] = useState<number>(48.6);
+  const [availableStorageGb, setAvailableStorageGb] = useState<number>(32.0);
 
-  // Probe live device flash storage quota
+  // Probe live device flash storage
   useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
-      navigator.storage.estimate().then((est) => {
-        if (est.quota) {
-          setAvailableStorageGb(Number((est.quota / (1024 * 1024 * 1024)).toFixed(1)));
-        }
-      });
-    }
-  }, []);
+    ModelStorage.getStorageStatsAsync().then((stats) => {
+      if (stats.freeSpaceGb > 0) {
+        setAvailableStorageGb(stats.freeSpaceGb);
+      }
+    });
+  }, [installedIds]);
 
   // Subscribe to installed models updates
   useEffect(() => {
@@ -102,26 +105,28 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   // Filter models
   const filteredModels = useMemo(() => {
     let list: ZayloModel[] = ZAYLO_MODELS;
+    const currentInstalled = installedIds || [];
 
     if (activeCategory === 'installed') {
-      list = ZAYLO_MODELS.filter((m) => installedIds.includes(m.id));
+      list = ZAYLO_MODELS.filter((m) => currentInstalled.includes(m.id));
     } else if (activeCategory === 'compact') {
       list = ZAYLO_MODELS.filter((m) => m.sizeMb < 1000);
     } else if (activeCategory === 'flagship') {
       list = ZAYLO_MODELS.filter((m) => m.sizeMb >= 1000);
     } else if (activeCategory === 'reasoning') {
-      list = ZAYLO_MODELS.filter((m) =>
-        m.capabilities.includes('REASONING') || m.capabilities.includes('CHAIN_OF_THOUGHT')
-      );
+      list = ZAYLO_MODELS.filter((m) => {
+        const caps = m.capabilities || [];
+        return caps.includes('REASONING') || caps.includes('CHAIN_OF_THOUGHT');
+      });
     }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
         (m) =>
-          m.name.toLowerCase().includes(q) ||
-          m.publisher.toLowerCase().includes(q) ||
-          m.parameterCount.toLowerCase().includes(q)
+          (m.name || '').toLowerCase().includes(q) ||
+          (m.publisher || '').toLowerCase().includes(q) ||
+          (m.parameterCount || '').toLowerCase().includes(q)
       );
     }
 
@@ -157,23 +162,40 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     });
   };
 
-  const handleLoadModel = (model: ZayloModel) => {
-    const converted: OnDeviceModel = {
-      id: model.id,
-      name: model.name,
-      tagline: model.description,
-      parameters: model.parameterCount,
-      sizeMb: model.sizeMb,
-      requiredRamMb: Math.round(model.sizeMb * 1.3),
-      minTier: model.sizeMb > 1500 ? 'tier_3_flagship' : 'tier_2_balanced',
-      quantization: model.quantization,
-      downloadUrl: model.downloadUrl,
-      isDownloaded: true,
-    };
-    onSelectModel(converted);
+  const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
+
+  const handleLoadModel = async (model: ZayloModel) => {
+    try {
+      setLoadingModelId(model.id);
+      const converted: OnDeviceModel = {
+        id: model.id,
+        name: model.name,
+        tagline: model.description,
+        parameters: model.parameterCount,
+        sizeMb: model.sizeMb,
+        requiredRamMb: Math.round(model.sizeMb * 1.3),
+        minTier: model.sizeMb > 1500 ? 'tier_3_flagship' : 'tier_2_balanced',
+        quantization: model.quantization,
+        downloadUrl: model.downloadUrl,
+        isDownloaded: true,
+      };
+
+      const result = await OnDeviceEngine.loadModel(converted, pagingConfig);
+      if (result.success) {
+        onSelectModel(converted);
+        Alert.alert('Model Loaded', result.message);
+      } else {
+        Alert.alert('Load Model', result.message);
+      }
+    } catch (err: any) {
+      Alert.alert('Load Model Error', err?.message || 'Failed to initialize model in memory.');
+    } finally {
+      setLoadingModelId(null);
+    }
   };
 
-  const handleUnloadModel = () => {
+  const handleUnloadModel = async () => {
+    await OnDeviceEngine.unloadModel();
     onSelectModel(null);
   };
 
@@ -204,7 +226,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
   const totalInstalledSizeMb = useMemo(() => {
     return ZAYLO_MODELS
-      .filter((m) => installedIds.includes(m.id))
+      .filter((m) => (installedIds || []).includes(m.id))
       .reduce((acc, curr) => acc + curr.sizeMb, 0);
   }, [installedIds]);
 
@@ -374,7 +396,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
           </View>
         ) : (
           filteredModels.map((model) => {
-            const isDownloaded = installedIds.includes(model.id);
+            const isDownloaded = (installedIds || []).includes(model.id);
             const isSelected = activeModel?.id === model.id;
             const progress = downloadProgressMap[model.id];
             const isDownloading = !!progress && progress.status === 'downloading';
@@ -393,19 +415,21 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                   theme.shadows.sm,
                 ]}
               >
-                {/* Card Top: Publisher chip, Name, Quantization */}
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.titleRow}>
-                      <View style={[styles.pubChip, { backgroundColor: pubColors.bg }]}>
-                        <Text style={[styles.pubChipText, { color: pubColors.text }]}>
-                          {model.publisher}
-                        </Text>
-                      </View>
-                      <Text style={[styles.modelName, { color: theme.textPrimary }]}>
-                        {model.name}
+                {/* Top Badges Row */}
+                <View style={styles.topBadgesRow}>
+                  <View style={styles.badgesLeft}>
+                    <View style={[styles.pubChip, { backgroundColor: pubColors.bg }]}>
+                      <Text style={[styles.pubChipText, { color: pubColors.text }]}>
+                        {model.publisher}
                       </Text>
                     </View>
+                    {model.capabilities && model.capabilities[0] && (
+                      <View style={[styles.capChip, { backgroundColor: theme.backgroundSecondary }]}>
+                        <Text style={[styles.capChipText, { color: theme.textMuted }]} numberOfLines={1}>
+                          {model.capabilities[0]}
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
                   <View style={[styles.quantBadge, { backgroundColor: theme.backgroundSecondary }]}>
@@ -415,34 +439,37 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                   </View>
                 </View>
 
-                {/* Description */}
-                <Text style={[styles.modelDesc, { color: theme.textSecondary }]}>
+                {/* Model Name & Tagline */}
+                <Text style={[styles.modelName, { color: theme.textPrimary }]} numberOfLines={1}>
+                  {model.name}
+                </Text>
+                <Text style={[styles.modelDesc, { color: theme.textSecondary }]} numberOfLines={2}>
                   {model.description}
                 </Text>
 
                 {/* Specs Row */}
                 <View style={[styles.specsRow, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
                   <View style={styles.specBox}>
-                    <Text style={[styles.specLabel, { color: theme.textMuted }]}>FILE SIZE</Text>
-                    <Text style={[styles.specVal, { color: theme.textPrimary }]}>
+                    <Text style={[styles.specLabel, { color: theme.textMuted }]} numberOfLines={1}>FILE SIZE</Text>
+                    <Text style={[styles.specVal, { color: theme.textPrimary }]} numberOfLines={1}>
                       {model.sizeMb} MB
                     </Text>
                   </View>
                   <View style={styles.specBox}>
-                    <Text style={[styles.specLabel, { color: theme.textMuted }]}>RAM REQUIRED</Text>
-                    <Text style={[styles.specVal, { color: theme.textPrimary }]}>
+                    <Text style={[styles.specLabel, { color: theme.textMuted }]} numberOfLines={1}>RAM REQ</Text>
+                    <Text style={[styles.specVal, { color: theme.textPrimary }]} numberOfLines={1}>
                       ~{(model.sizeMb * 1.3 / 1024).toFixed(1)} GB
                     </Text>
                   </View>
                   <View style={styles.specBox}>
-                    <Text style={[styles.specLabel, { color: theme.textMuted }]}>CONTEXT</Text>
-                    <Text style={[styles.specVal, { color: theme.textPrimary }]}>
+                    <Text style={[styles.specLabel, { color: theme.textMuted }]} numberOfLines={1}>CONTEXT</Text>
+                    <Text style={[styles.specVal, { color: theme.textPrimary }]} numberOfLines={1}>
                       {model.contextLength} ctx
                     </Text>
                   </View>
                   <View style={styles.specBox}>
-                    <Text style={[styles.specLabel, { color: theme.textMuted }]}>PARAMS</Text>
-                    <Text style={[styles.specVal, { color: theme.textPrimary }]}>
+                    <Text style={[styles.specLabel, { color: theme.textMuted }]} numberOfLines={1}>PARAMS</Text>
+                    <Text style={[styles.specVal, { color: theme.textPrimary }]} numberOfLines={1}>
                       {model.parameterCount}
                     </Text>
                   </View>
@@ -450,122 +477,147 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
                 {/* Active Downloading Progress Section */}
                 {isDownloading && (
-                  <View style={[styles.downloadingSection, { backgroundColor: theme.backgroundSecondary }]}>
+                  <View style={[styles.downloadingSection, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
                     <View style={styles.downloadProgressHeader}>
-                      <Text style={[styles.downloadProgressText, { color: theme.textPrimary }]}>
-                        Downloading weights: {progress.downloadedMb} / {progress.totalMb} MB ({progress.percent}%)
+                      <View style={styles.downloadStatusLeft}>
+                        <View style={[styles.downloadPulseDot, { backgroundColor: theme.accent }]} />
+                        <Text style={[styles.downloadProgressTitle, { color: theme.textPrimary }]}>
+                          Downloading GGUF Weights
+                        </Text>
+                      </View>
+                      <View style={[styles.percentBadge, { backgroundColor: theme.pastels.blue.bg }]}>
+                        <Text style={[styles.percentBadgeText, { color: theme.pastels.blue.text }]}>
+                          {progress.percent}%
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.progressBarWrapper}>
+                      <SmoothProgressBar
+                        percent={progress.percent}
+                        trackColor={theme.cardBorder}
+                        fillColor={theme.accent}
+                      />
+                    </View>
+
+                    <View style={styles.downloadMetaRow}>
+                      <Text style={[styles.downloadBytesText, { color: theme.textSecondary }]}>
+                        {progress.downloadedMb} / {progress.totalMb} MB
                       </Text>
-                      <Text style={[styles.downloadSpeedText, { color: theme.accent }]}>
-                        {progress.speedMbS} MB/s • {progress.etaSeconds}s left
+                      <Text style={[styles.downloadSpeedText, { color: theme.accent }]} numberOfLines={1}>
+                        {progress.speedMbS > 0 ? `${progress.speedMbS} MB/s` : 'Connecting...'}
+                        {progress.etaSeconds > 0 ? ` • ${progress.etaSeconds}s left` : ''}
                       </Text>
                     </View>
 
-                    <SmoothProgressBar
-                      percent={progress.percent}
-                      trackColor={theme.cardBorder}
-                      fillColor={theme.accent}
-                    />
-
                     <TouchableOpacity
-                      style={styles.cancelDownloadBtn}
+                      style={[styles.cancelDownloadBtn, { borderColor: theme.cardBorder }]}
                       onPress={() => handleCancelDownload(model.id)}
                       activeOpacity={0.7}
                     >
-                      <Icon name="x" size={13} color={theme.danger} />
+                      <Icon name="x" size={12} color={theme.danger} />
                       <Text style={[styles.cancelDownloadText, { color: theme.danger }]}>Cancel Download</Text>
                     </TouchableOpacity>
                   </View>
                 )}
 
-                {/* Footer Controls */}
+                {/* Proper Dedicated Action Section */}
                 {!isDownloading && (
-                  <View style={[styles.cardFooter, { borderTopColor: theme.cardBorder }]}>
-                    {/* Left status / tags */}
-                    <View style={styles.tagsRow}>
-                      {isDownloaded ? (
-                        <View style={[styles.downloadedStatusPill, { backgroundColor: theme.successLight }]}>
-                          <Icon name="check" size={11} color={theme.success} />
-                          <Text style={[styles.downloadedStatusText, { color: theme.success }]}>
-                            Downloaded on Device
+                  <View style={styles.properActionsSection}>
+                    {isSelected ? (
+                      // 1. ACTIVE MODEL
+                      <View style={styles.properActionGroup}>
+                        <View style={[styles.statusBanner, { backgroundColor: theme.successLight, borderColor: theme.success }]}>
+                          <View style={[styles.activeDot, { backgroundColor: theme.success }]} />
+                          <Text style={[styles.statusBannerText, { color: theme.success }]}>
+                            Active in RAM • Ready for Instant Chat
                           </Text>
                         </View>
-                      ) : (
-                        <View style={[styles.capChip, { backgroundColor: theme.backgroundSecondary }]}>
-                          <Text style={[styles.capChipText, { color: theme.textMuted }]}>
-                            {model.capabilities[0]}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Right action buttons */}
-                    <View style={styles.actionButtonsRow}>
-                      {isSelected ? (
-                        <>
+                        <View style={styles.properButtonRow}>
                           <TouchableOpacity
-                            style={[
-                              styles.loadButtonActive,
-                              { backgroundColor: theme.successLight, borderColor: theme.success },
-                            ]}
+                            style={[styles.properPrimaryBtn, { backgroundColor: theme.success }]}
                             onPress={onOpenChat}
                             activeOpacity={0.8}
                           >
-                            <Icon name="message-square" size={12} color={theme.success} />
-                            <Text style={[styles.loadButtonText, { color: theme.success }]}>
-                              Active • Chat
-                            </Text>
+                            <Icon name="message-square" size={15} color="#ffffff" />
+                            <Text style={styles.properBtnTextWhite}>Open Chat</Text>
                           </TouchableOpacity>
-
                           <TouchableOpacity
-                            style={[styles.unloadButton, { backgroundColor: theme.backgroundSecondary }]}
+                            style={[styles.properSecondaryBtn, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}
                             onPress={handleUnloadModel}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.unloadButtonText, { color: theme.textMuted }]}>
-                              Unload
-                            </Text>
+                            <Icon name="square" size={13} color={theme.textMuted} />
+                            <Text style={[styles.properBtnTextMuted, { color: theme.textMuted }]}>Unload</Text>
                           </TouchableOpacity>
-                        </>
-                      ) : isDownloaded ? (
-                        <>
+                        </View>
+                      </View>
+                    ) : isDownloaded ? (
+                      // 2. DOWNLOADED MODEL (NOT ACTIVE)
+                      <View style={styles.properActionGroup}>
+                        <View style={[styles.statusBanner, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}>
+                          <Icon name="check-circle" size={12} color={theme.success} />
+                          <Text style={[styles.statusBannerText, { color: theme.textSecondary }]}>
+                            Downloaded on Device Storage ({model.sizeMb} MB)
+                          </Text>
+                        </View>
+                        <View style={styles.properButtonRow}>
                           <TouchableOpacity
-                            style={[
-                              styles.loadButton,
-                              { backgroundColor: theme.floatingNav },
-                              theme.shadows.sm,
-                            ]}
+                            style={[styles.properPrimaryBtn, { backgroundColor: theme.floatingNav }]}
                             onPress={() => handleLoadModel(model)}
                             activeOpacity={0.8}
+                            disabled={loadingModelId === model.id}
                           >
-                            <Icon name="play" size={12} color="#ffffff" />
-                            <Text style={styles.loadButtonTextWhite}>Load into RAM</Text>
+                            {loadingModelId === model.id ? (
+                              <>
+                                <ActivityIndicator size="small" color="#ffffff" style={{ transform: [{ scale: 0.75 }] }} />
+                                <Text style={styles.properBtnTextWhite}>Loading RAM...</Text>
+                              </>
+                            ) : (
+                              <>
+                                <Icon name="play" size={14} color="#ffffff" />
+                                <Text style={styles.properBtnTextWhite}>Load into RAM</Text>
+                              </>
+                            )}
                           </TouchableOpacity>
-
                           <TouchableOpacity
-                            style={[styles.deleteButton, { backgroundColor: theme.backgroundSecondary }]}
+                            style={[styles.properDangerBtn, { backgroundColor: theme.backgroundSecondary, borderColor: theme.cardBorder }]}
                             onPress={() => handleDeleteModel(model.id)}
                             activeOpacity={0.7}
                           >
-                            <Icon name="trash-2" size={13} color={theme.danger} />
+                            <Icon name="trash-2" size={14} color={theme.danger} />
+                            <Text style={[styles.properBtnTextDanger, { color: theme.danger }]}>Delete</Text>
                           </TouchableOpacity>
-                        </>
-                      ) : (
+                        </View>
+                      </View>
+                    ) : (
+                      // 3. NOT DOWNLOADED MODEL
+                      <View style={{ width: '100%', gap: 6 }}>
+                        {progress?.status === 'error' && (
+                          <View style={[styles.statusBanner, { backgroundColor: '#fee2e2', borderColor: '#ef4444' }]}>
+                            <Icon name="alert-triangle" size={12} color="#dc2626" />
+                            <Text style={[styles.statusBannerText, { color: '#dc2626' }]}>
+                              Download interrupted. Tap to retry.
+                            </Text>
+                          </View>
+                        )}
                         <TouchableOpacity
                           style={[
-                            styles.downloadButton,
-                            { backgroundColor: theme.pastels.blue.text },
-                            theme.shadows.sm,
+                            styles.properDownloadBtn,
+                            { backgroundColor: progress?.status === 'error' ? theme.accent : theme.floatingNav },
                           ]}
                           onPress={() => handleStartDownload(model)}
                           activeOpacity={0.8}
                         >
-                          <Icon name="download" size={13} color="#ffffff" />
-                          <Text style={styles.downloadButtonText}>
-                            Download ({model.sizeMb} MB)
+                          <Icon name={progress?.status === 'error' ? 'refresh-cw' : 'download'} size={15} color="#ffffff" />
+                          <Text style={styles.properBtnTextWhite}>
+                            {progress?.status === 'error'
+                              ? `Retry Download (${model.sizeMb} MB)`
+                              : `Download Model (${model.sizeMb} MB)`}
                           </Text>
                         </TouchableOpacity>
-                      )}
-                    </View>
+                      </View>
+                    )}
                   </View>
                 )}
               </View>
@@ -760,6 +812,18 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  topBadgesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  badgesLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
   pubChip: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -770,14 +834,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.2,
   },
+  capChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  capChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
   modelName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: -0.2,
+    marginBottom: 4,
   },
   quantBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 8,
   },
   quantBadgeText: {
@@ -791,14 +865,17 @@ const styles = StyleSheet.create({
   },
   specsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 12,
   },
   specBox: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
   },
   specLabel: {
     fontSize: 9,
@@ -812,8 +889,9 @@ const styles = StyleSheet.create({
   },
   downloadingSection: {
     padding: 12,
-    borderRadius: 14,
-    marginTop: 4,
+    borderRadius: 16,
+    marginTop: 6,
+    borderWidth: 1,
   },
   downloadProgressHeader: {
     flexDirection: 'row',
@@ -821,20 +899,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  downloadProgressText: {
+  downloadStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  downloadPulseDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  downloadProgressTitle: {
     fontSize: 11,
     fontWeight: '700',
   },
-  downloadSpeedText: {
+  percentBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  percentBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    fontFamily: 'monospace',
+  },
+  progressBarWrapper: {
+    marginBottom: 8,
+  },
+  downloadMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  downloadBytesText: {
+    fontSize: 10,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  downloadSpeedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    flexShrink: 1,
+    textAlign: 'right',
   },
   progressBarTrack: {
     height: 6,
     borderRadius: 3,
     overflow: 'hidden',
-    marginBottom: 8,
   },
   progressBarFill: {
     height: '100%',
@@ -846,102 +959,96 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
     paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
     alignSelf: 'center',
   },
   cancelDownloadText: {
     fontSize: 11,
     fontWeight: '700',
   },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
+  properActionsSection: {
+    marginTop: 12,
     borderTopWidth: 1,
+    borderTopColor: 'rgba(150, 150, 150, 0.1)',
+    paddingTop: 10,
   },
-  tagsRow: {
+  properActionGroup: {
+    gap: 8,
+  },
+  statusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
   },
-  downloadedStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+  statusBannerText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
-  downloadedStatusText: {
-    fontSize: 10,
-    fontWeight: '800',
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  capChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  capChipText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  actionButtonsRow: {
+  properButtonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  downloadButton: {
+  properPrimaryBtn: {
+    flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  downloadButtonText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  loadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  loadButtonTextWhite: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  loadButtonActive: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  loadButtonText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  unloadButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 14,
-  },
-  unloadButtonText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 7,
+    height: 42,
+    borderRadius: 14,
+  },
+  properSecondaryBtn: {
+    width: 85,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  properDangerBtn: {
+    width: 85,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  properDownloadBtn: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 44,
+    borderRadius: 14,
+  },
+  properBtnTextWhite: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  properBtnTextMuted: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  properBtnTextDanger: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

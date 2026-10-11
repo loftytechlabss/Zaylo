@@ -111,7 +111,7 @@ export class DesktopClient {
         const url = `${host.url.replace(/\/+$/, '')}/v1/chat/completions`;
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
+          Accept: 'application/json',
         };
         if (host.apiKey) {
           headers['Authorization'] = `Bearer ${host.apiKey}`;
@@ -123,8 +123,9 @@ export class DesktopClient {
           body: JSON.stringify({
             model: host.activeModelName || 'default',
             messages: formattedMessages,
-            stream: true,
+            stream: false,
             temperature: 0.7,
+            max_tokens: 512,
           }),
           signal: controller.signal,
         });
@@ -133,44 +134,29 @@ export class DesktopClient {
           throw new Error(`Desktop server returned ${res.status}: ${res.statusText}`);
         }
 
-        const reader = res.body?.getReader();
-        if (!reader) {
-          throw new Error('Streaming response body is unavailable');
-        }
+        let totalTokens = 0;
+        let isCancelled = false;
 
-        const decoder = new TextDecoder('utf-8');
-        let buffer = '';
+        const data = await res.json();
+        const text = data?.choices?.[0]?.message?.content || '';
+        const words = text.split(' ');
+        firstTokenTime = Date.now();
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith(':')) continue;
-            if (trimmed === 'data: [DONE]') continue;
-
-            if (trimmed.startsWith('data: ')) {
-              try {
-                const parsed = JSON.parse(trimmed.slice(6));
-                const delta = parsed.choices?.[0]?.delta?.content;
-                if (delta) {
-                  if (firstTokenTime === 0) {
-                    firstTokenTime = Date.now();
-                  }
-                  totalTokens++;
-                  onToken(delta);
-                }
-              } catch {
-                // Ignore chunk parse errors
-              }
-            }
+        for (const word of words) {
+          if (controller.signal.aborted) {
+            isCancelled = true;
+            break;
           }
+          await new Promise((r) => setTimeout(r, 20));
+          if (controller.signal.aborted) {
+            isCancelled = true;
+            break;
+          }
+          totalTokens++;
+          onToken(word + ' ');
         }
+
+        if (isCancelled) return;
 
         const endTime = Date.now();
         const durationSec = Math.max(0.1, (endTime - (firstTokenTime || startTime)) / 1000);

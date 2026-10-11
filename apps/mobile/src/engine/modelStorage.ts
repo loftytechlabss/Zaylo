@@ -32,12 +32,32 @@ class ModelStorageManager {
         }
       }
 
-      // In native Expo mobile, also check if files exist on disk
+      // In native Expo mobile, read manifest and verify actual weights on disk
       if (FileSystem.documentDirectory) {
         const modelsDir = `${FileSystem.documentDirectory}models/`;
         const dirInfo = await FileSystem.getInfoAsync(modelsDir);
-        if (dirInfo.exists && (dirInfo as any).isDirectory) {
-          // files are present
+        if (dirInfo.exists) {
+          const manifestFile = `${modelsDir}installed.json`;
+          const manifestInfo = await FileSystem.getInfoAsync(manifestFile);
+          if (manifestInfo.exists) {
+            try {
+              const content = await FileSystem.readAsStringAsync(manifestFile);
+              const ids: string[] = JSON.parse(content);
+              ids.forEach((id) => this.installedModelIds.add(id));
+            } catch {}
+          }
+
+          const files = await FileSystem.readDirectoryAsync(modelsDir);
+          for (const file of files) {
+            if (file.endsWith('.gguf')) {
+              const modelId = file.replace(/\.gguf$/, '');
+              const fileInfo = await FileSystem.getInfoAsync(`${modelsDir}${file}`);
+              if (fileInfo.exists && typeof fileInfo.size === 'number' && fileInfo.size > 10 * 1024 * 1024) {
+                this.installedModelIds.add(modelId);
+              }
+            }
+          }
+          this.notifyInstalledChanged();
         }
       }
     } catch {}
@@ -50,6 +70,14 @@ class ModelStorageManager {
           'zaylo_installed_models',
           JSON.stringify(Array.from(this.installedModelIds))
         );
+      }
+      if (FileSystem.documentDirectory) {
+        const modelsDir = `${FileSystem.documentDirectory}models/`;
+        const manifestFile = `${modelsDir}installed.json`;
+        FileSystem.writeAsStringAsync(
+          manifestFile,
+          JSON.stringify(Array.from(this.installedModelIds))
+        ).catch(() => {});
       }
     } catch {}
   }
@@ -211,7 +239,15 @@ class ModelStorageManager {
         record.downloadResumable = downloadResumable;
         const result = await downloadResumable.downloadAsync();
 
-        if (result && result.uri) {
+        if (result && result.uri && (!result.status || (result.status >= 200 && result.status < 300))) {
+          // Verify downloaded file size on disk (must be at least 10 MB for valid GGUF weights)
+          const fileInfo = await FileSystem.getInfoAsync(destinationUri);
+          if (!fileInfo.exists || typeof fileInfo.size !== 'number' || fileInfo.size < 10 * 1024 * 1024) {
+            await FileSystem.deleteAsync(destinationUri, { idempotent: true }).catch(() => {});
+            throw new Error(`Incomplete download: Received ${fileInfo.exists && fileInfo.size ? (fileInfo.size / (1024 * 1024)).toFixed(1) : 0} MB, expected ${model.sizeMb} MB`);
+          }
+
+          const actualSizeMb = Number((fileInfo.size / (1024 * 1024)).toFixed(1));
           this.activeDownloads.delete(model.id);
           this.installedModelIds.add(model.id);
           this.saveInstalledToStorage();
@@ -219,8 +255,8 @@ class ModelStorageManager {
 
           notify({
             modelId: model.id,
-            downloadedMb: model.sizeMb,
-            totalMb: model.sizeMb,
+            downloadedMb: actualSizeMb,
+            totalMb: actualSizeMb,
             percent: 100,
             speedMbS: 0,
             etaSeconds: 0,
@@ -229,6 +265,9 @@ class ModelStorageManager {
 
           if (onComplete) onComplete();
           return;
+        } else {
+          await FileSystem.deleteAsync(destinationUri, { idempotent: true }).catch(() => {});
+          throw new Error(`Server returned HTTP ${result?.status || 'error'}`);
         }
       }
 
@@ -389,20 +428,51 @@ class ModelStorageManager {
 
   public async getStorageStatsAsync(): Promise<{ totalInstalledMb: number; freeSpaceGb: number }> {
     let totalInstalledMb = 0;
+    let freeSpaceGb = 0;
+
     try {
-      if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
-        const estimate = await navigator.storage.estimate();
-        const freeGb = estimate.quota ? Number((estimate.quota / (1024 * 1024 * 1024)).toFixed(1)) : 48.6;
-        return { totalInstalledMb, freeSpaceGb: freeGb };
+      if (FileSystem.documentDirectory) {
+        const modelsDir = `${FileSystem.documentDirectory}models/`;
+        const dirInfo = await FileSystem.getInfoAsync(modelsDir);
+        if (dirInfo.exists) {
+          const files = await FileSystem.readDirectoryAsync(modelsDir);
+          for (const file of files) {
+            if (file.endsWith('.gguf')) {
+              const fileInfo = await FileSystem.getInfoAsync(`${modelsDir}${file}`);
+              if (fileInfo.exists && typeof fileInfo.size === 'number') {
+                totalInstalledMb += fileInfo.size / (1024 * 1024);
+              }
+            }
+          }
+        }
+        if (typeof FileSystem.getFreeDiskStorageAsync === 'function') {
+          const freeBytes = await FileSystem.getFreeDiskStorageAsync();
+          if (typeof freeBytes === 'number' && freeBytes > 0) {
+            freeSpaceGb = Number((freeBytes / (1024 * 1024 * 1024)).toFixed(1));
+          }
+        }
       }
     } catch {}
-    return { totalInstalledMb: 0, freeSpaceGb: 48.6 };
+
+    if (freeSpaceGb === 0 && typeof navigator !== 'undefined' && navigator.storage?.estimate) {
+      try {
+        const est = await navigator.storage.estimate();
+        if (est.quota) {
+          freeSpaceGb = Number((est.quota / (1024 * 1024 * 1024)).toFixed(1));
+        }
+      } catch {}
+    }
+
+    return {
+      totalInstalledMb: Number(totalInstalledMb.toFixed(1)),
+      freeSpaceGb: freeSpaceGb > 0 ? freeSpaceGb : 32.0,
+    };
   }
 
   public getStorageStats(): { totalInstalledMb: number; freeSpaceGb: number } {
     return {
       totalInstalledMb: 0,
-      freeSpaceGb: 48.6,
+      freeSpaceGb: 32.0,
     };
   }
 }

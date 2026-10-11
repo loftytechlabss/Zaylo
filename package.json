@@ -35,7 +35,8 @@
       "electron-winstaller",
       "esbuild",
       "better-sqlite3",
-      "sql.js"
+      "sql.js",
+      "llama.rn"
     ]
   }
 }

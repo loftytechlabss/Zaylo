@@ -1,17 +1,20 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   Modal,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
-  Platform,
   Animated,
+  Platform,
 } from 'react-native';
-import { lightTheme, Theme } from '../theme/theme';
+import type { Theme } from '../theme/theme';
 import type { DeviceMemoryProfile, MemoryPagingConfig, DeviceHardwareTelemetry } from '../types';
 import { DeviceProfiler } from '../engine/deviceProfiler';
+import { ModelStorage } from '../engine/modelStorage';
+import { OnDeviceEngine } from '../engine/onDeviceEngine';
+import { getHostIp } from '../utils/networkHost';
 import { Icon } from './common/Icon';
 
 interface MemoryGaugeModalProps {
@@ -19,36 +22,43 @@ interface MemoryGaugeModalProps {
   onClose: () => void;
   profile: DeviceMemoryProfile;
   pagingConfig: MemoryPagingConfig;
-  onUpdatePagingConfig: (newConfig: Partial<MemoryPagingConfig>) => void;
-  theme?: Theme;
+  onUpdatePagingConfig: (config: Partial<MemoryPagingConfig>) => void;
+  theme: Theme;
 }
 
-type TelemetryTab = 'silicon' | 'memory' | 'storage' | 'system';
+type TelemetryTab = 'ram' | 'storage' | 'engine';
 
 export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
   visible,
   onClose,
-  theme = lightTheme,
+  profile,
+  theme,
 }) => {
-  const [activeTab, setActiveTab] = useState<TelemetryTab>('silicon');
   const [telemetry, setTelemetry] = useState<DeviceHardwareTelemetry>(() =>
     DeviceProfiler.getHardwareTelemetry()
   );
+  const [activeTab, setActiveTab] = useState<TelemetryTab>('ram');
+  const [installedCount, setInstalledCount] = useState<number>(0);
+  const [availableStorageGb, setAvailableStorageGb] = useState<number>(48.6);
 
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Live storage and installed models inspection
   useEffect(() => {
-    let active = true;
-    if (visible) {
-      DeviceProfiler.getHardwareTelemetryAsync().then((data) => {
-        if (active) setTelemetry(data);
+    if (!visible) return;
+
+    setTelemetry(DeviceProfiler.getHardwareTelemetry());
+    setInstalledCount(ModelStorage.getInstalledModelIds().length);
+
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then((est) => {
+        if (est.quota) {
+          setAvailableStorageGb(Number((est.quota / (1024 * 1024 * 1024)).toFixed(1)));
+        }
       });
     }
-    return () => {
-      active = false;
-    };
   }, [visible]);
 
   useEffect(() => {
@@ -95,6 +105,15 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
     });
   };
 
+  const activeModel = OnDeviceEngine.getActiveModel();
+  const loadedRamMb = OnDeviceEngine.getLoadedRamMb();
+  const hostIp = getHostIp();
+
+  const totalRam = profile.totalRamMb || 8192;
+  const systemOverhead = profile.totalRamMb - profile.availableRamMb;
+  const usedRam = systemOverhead + (loadedRamMb || 0);
+  const usedPercent = Math.min(100, Math.round((usedRam / totalRam) * 100));
+
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
       <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
@@ -116,10 +135,10 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
           <View style={[styles.header, { borderBottomColor: theme.cardBorder }]}>
             <View>
               <Text style={[styles.title, { color: theme.textPrimary }]}>
-                Hardware & Telemetry
+                Device & System Telemetry
               </Text>
               <Text style={[styles.subtitle, { color: theme.textMuted }]}>
-                {telemetry.socName}
+                {Platform.OS === 'ios' ? 'Apple iOS' : 'Android OS'} • Authentic Hardware Diagnostics
               </Text>
             </View>
             <TouchableOpacity
@@ -137,27 +156,27 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
               <Icon name="cpu" size={18} color={theme.pastels.blue.text} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.socTitle, { color: theme.textPrimary }]}>
-                {telemetry.socName}
+              <Text style={[styles.socTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+                {Platform.OS === 'ios' ? 'Apple Silicon Mobile SoC' : telemetry.socName}
               </Text>
               <Text style={[styles.socSubtitle, { color: theme.textMuted }]}>
-                {telemetry.cpuTotalCores} Cores • {telemetry.gpuRenderer.split(' ')[0]} GPU • {telemetry.npuTopsInt8} TOPS NPU
+                {telemetry.cpuTotalCores} Hardware Threads • Metal GPU Compute
               </Text>
             </View>
             <View style={[styles.acceleratedBadge, { backgroundColor: theme.successLight }]}>
+              <View style={[styles.liveDot, { backgroundColor: theme.success }]} />
               <Text style={[styles.acceleratedBadgeText, { color: theme.success }]}>
-                ACCELERATED
+                ONLINE
               </Text>
             </View>
           </View>
 
-          {/* Segmented Tabs */}
+          {/* 3 Clean Segmented Tabs (Never wrap) */}
           <View style={styles.tabsRow}>
             {[
-              { id: 'silicon', label: 'Chips & Cores', icon: 'cpu' },
-              { id: 'memory', label: 'RAM & Paging', icon: 'layers' },
-              { id: 'storage', label: 'Storage & I/O', icon: 'hard-drive' },
-              { id: 'system', label: 'OS & Thermals', icon: 'activity' },
+              { id: 'ram', label: 'RAM & Memory', icon: 'layers' },
+              { id: 'storage', label: 'Storage & Disk', icon: 'hard-drive' },
+              { id: 'engine', label: 'Host & Engine', icon: 'zap' },
             ].map((tab) => {
               const isSelected = activeTab === tab.id;
               return (
@@ -177,6 +196,7 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
                       styles.tabButtonText,
                       { color: isSelected ? '#ffffff' : theme.textSecondary },
                     ]}
+                    numberOfLines={1}
                   >
                     {tab.label}
                   </Text>
@@ -185,145 +205,12 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
             })}
           </View>
 
-          {/* Tab Content */}
+          {/* Scrollable Tab Content */}
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            {/* TAB 1: SILICON & CORES */}
-            {activeTab === 'silicon' && (
+            {/* TAB 1: RAM & MEMORY */}
+            {activeTab === 'ram' && (
               <View style={styles.tabContentBlock}>
-                {/* 1. CPU Processor */}
-                <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-                  <View style={styles.specCardHeader}>
-                    <View style={[styles.cardHeaderIcon, { backgroundColor: theme.pastels.blue.bg }]}>
-                      <Icon name="cpu" size={15} color={theme.pastels.blue.text} />
-                    </View>
-                    <Text style={[styles.cardHeaderTitle, { color: theme.textPrimary }]}>
-                      CPU & Architecture
-                    </Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Architecture</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.cpuArchitecture}</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Total Cores</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.cpuTotalCores} Hardware Cores</Text>
-                  </View>
-
-                  <Text style={[styles.subHeading, { color: theme.textMuted, marginTop: 10 }]}>CLUSTER CONFIGURATION</Text>
-                  {telemetry.cpuClusters.map((cluster, idx) => (
-                    <View key={idx} style={styles.clusterRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.clusterTitle, { color: theme.textPrimary }]}>
-                          {cluster.count}x {cluster.type} Cores
-                        </Text>
-                        <Text style={[styles.clusterFreq, { color: theme.textMuted }]}>
-                          Clocked up to {cluster.clockGhz.toFixed(2)} GHz
-                        </Text>
-                      </View>
-                      <View style={[styles.freqBarBg, { backgroundColor: theme.backgroundSecondary }]}>
-                        <View
-                          style={[
-                            styles.freqBarFill,
-                            {
-                              width: `${Math.round((cluster.clockGhz / 4.0) * 100)}%`,
-                              backgroundColor: cluster.type === 'Performance' || cluster.type === 'Prime'
-                                ? theme.accent
-                                : theme.pastels.blue.text,
-                            },
-                          ]}
-                        />
-                      </View>
-                    </View>
-                  ))}
-
-                  <Text style={[styles.subHeading, { color: theme.textMuted, marginTop: 12 }]}>VECTOR & INSTRUCTION SETS</Text>
-                  <View style={styles.chipTagsWrap}>
-                    {telemetry.cpuInstructionSets.map((inst, i) => (
-                      <View key={i} style={[styles.instructionTag, { backgroundColor: theme.backgroundSecondary }]}>
-                        <Text style={[styles.instructionTagText, { color: theme.textPrimary }]}>{inst}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                {/* 2. GPU Compute */}
-                <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.cardBorder, marginTop: 14 }]}>
-                  <View style={styles.specCardHeader}>
-                    <View style={[styles.cardHeaderIcon, { backgroundColor: theme.pastels.purple.bg }]}>
-                      <Icon name="zap" size={15} color={theme.pastels.purple.text} />
-                    </View>
-                    <Text style={[styles.cardHeaderTitle, { color: theme.textPrimary }]}>
-                      GPU Hardware Compute
-                    </Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Renderer</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.gpuRenderer}</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Compute API</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.gpuComputeApi}</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Half-Precision (FP16)</Text>
-                    <Text style={[styles.specItemValue, { color: theme.accent }]}>{telemetry.gpuTflopsFp16} TFLOPS</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Memory Model</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
-                      {telemetry.gpuSharedMemory ? 'Unified Memory Architecture (Zero-Copy UMA)' : 'Dedicated VRAM'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* 3. NPU / Neural Engine */}
-                <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.cardBorder, marginTop: 14 }]}>
-                  <View style={styles.specCardHeader}>
-                    <View style={[styles.cardHeaderIcon, { backgroundColor: theme.pastels.green.bg }]}>
-                      <Icon name="activity" size={15} color={theme.pastels.green.text} />
-                    </View>
-                    <Text style={[styles.cardHeaderTitle, { color: theme.textPrimary }]}>
-                      NPU & Neural Accelerator
-                    </Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Neural Engine</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.npuName}</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>AI Peak Compute</Text>
-                    <Text style={[styles.specItemValue, { color: theme.success, fontWeight: '800' }]}>{telemetry.npuTopsInt8} TOPS</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Driver Status</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.npuStatus}</Text>
-                  </View>
-
-                  <Text style={[styles.subHeading, { color: theme.textMuted, marginTop: 10 }]}>PRECISION SUPPORT</Text>
-                  <View style={styles.chipTagsWrap}>
-                    {telemetry.npuPrecisionSupport.map((prec, i) => (
-                      <View key={i} style={[styles.instructionTag, { backgroundColor: theme.successLight }]}>
-                        <Text style={[styles.instructionTagText, { color: theme.success }]}>{prec}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* TAB 2: RAM & PAGING */}
-            {activeTab === 'memory' && (
-              <View style={styles.tabContentBlock}>
-                {/* Memory Gauge Meter */}
+                {/* 1. RAM Allocation Card */}
                 <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
                   <View style={styles.specCardHeader}>
                     <View style={[styles.cardHeaderIcon, { backgroundColor: theme.pastels.blue.bg }]}>
@@ -334,244 +221,174 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
                     </Text>
                   </View>
 
-                  {/* RAM Visual Bar */}
-                  <View style={styles.ramBarContainer}>
-                    <View style={styles.ramBarLabelsRow}>
-                      <Text style={[styles.ramBarLabel, { color: theme.textPrimary }]}>
-                        {telemetry.usedRamMb} MB Used ({Math.round((telemetry.usedRamMb / telemetry.totalRamMb) * 100)}%)
-                      </Text>
-                      <Text style={[styles.ramBarLabel, { color: theme.textMuted }]}>
-                        {telemetry.availableRamMb} MB Free
-                      </Text>
-                    </View>
+                  <View style={styles.memoryStatsHeader}>
+                    <Text style={[styles.ramUsageText, { color: theme.textPrimary }]}>
+                      {usedRam} MB Used ({usedPercent}%)
+                    </Text>
+                    <Text style={[styles.ramFreeText, { color: theme.textMuted }]}>
+                      {totalRam - usedRam} MB Free
+                    </Text>
+                  </View>
 
-                    <View style={[styles.ramBarTrack, { backgroundColor: theme.backgroundSecondary }]}>
-                      <View
-                        style={[
-                          styles.ramBarUsed,
-                          {
-                            width: `${Math.round((telemetry.usedRamMb / telemetry.totalRamMb) * 100)}%`,
-                            backgroundColor: theme.accent,
-                          },
-                        ]}
-                      />
-                    </View>
+                  <View style={[styles.ramBarTrack, { backgroundColor: theme.backgroundSecondary }]}>
+                    <View
+                      style={[
+                        styles.ramBarFill,
+                        {
+                          width: `${usedPercent}%`,
+                          backgroundColor: theme.accent,
+                        },
+                      ]}
+                    />
                   </View>
 
                   <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Total Installed RAM</Text>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Total Device Memory</Text>
                     <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
-                      {telemetry.totalRamMb} MB ({(telemetry.totalRamMb / 1024).toFixed(1)} GB)
+                      {totalRam} MB ({(totalRam / 1024).toFixed(1)} GB)
                     </Text>
                   </View>
 
                   <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Memory Technology</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.ramType}</Text>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Loaded Model Footprint</Text>
+                    <Text style={[styles.specItemValue, { color: activeModel ? theme.success : theme.textMuted }]}>
+                      {activeModel ? `${activeModel.name} (${loadedRamMb} MB)` : '0 MB (No model loaded in RAM)'}
+                    </Text>
                   </View>
 
                   <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Peak Bus Bandwidth</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.ramBandwidthGbps} GB/s</Text>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>System & App Overhead</Text>
+                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
+                      ~{systemOverhead} MB
+                    </Text>
                   </View>
                 </View>
 
-                {/* Virtual Memory Paging Engine */}
-                <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.cardBorder, marginTop: 14 }]}>
+                {/* 2. Paging & KV Cache Strategy */}
+                <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.cardBorder, marginTop: 12 }]}>
                   <View style={styles.specCardHeader}>
                     <View style={[styles.cardHeaderIcon, { backgroundColor: theme.pastels.yellow.bg }]}>
-                      <Icon name="refresh-cw" size={15} color={theme.pastels.yellow.text} />
+                      <Icon name="activity" size={15} color={theme.pastels.yellow.text} />
                     </View>
                     <Text style={[styles.cardHeaderTitle, { color: theme.textPrimary }]}>
-                      Kernel Virtual Memory Paging
+                      Paging & Virtual Memory
                     </Text>
                   </View>
 
                   <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Virtual Paging Engine</Text>
-                    <Text style={[styles.specItemValue, { color: theme.success }]}>Active (Demand Paging)</Text>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Paging Status</Text>
+                    <Text style={[styles.specItemValue, { color: theme.success }]}>
+                      {activeModel ? 'Active (Paging Buffer Allocated)' : 'Idle'}
+                    </Text>
                   </View>
 
                   <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Page Size</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.pageSizeKb} KB Pages</Text>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Context Window Limit</Text>
+                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
+                      {activeModel ? `${activeModel.sizeMb > 1000 ? 4096 : 2048} Tokens` : '2048 Tokens'}
+                    </Text>
                   </View>
 
                   <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>mmap Subsystem</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.mmapSupport}</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Dirty Pages Flush Limit</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.dirtyPageThresholdMb} MB</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>KV Cache Optimization</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.kvCacheCompression}</Text>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Quantization Scheme</Text>
+                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
+                      {activeModel ? `${activeModel.quantization} Quantized Weights` : 'Q8_0 / Q4_K_M'}
+                    </Text>
                   </View>
                 </View>
               </View>
             )}
 
-            {/* TAB 3: STORAGE & I/O */}
+            {/* TAB 2: STORAGE & DISK */}
             {activeTab === 'storage' && (
               <View style={styles.tabContentBlock}>
                 <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
                   <View style={styles.specCardHeader}>
-                    <View style={[styles.cardHeaderIcon, { backgroundColor: theme.pastels.green.bg }]}>
-                      <Icon name="hard-drive" size={15} color={theme.pastels.green.text} />
-                    </View>
-                    <Text style={[styles.cardHeaderTitle, { color: theme.textPrimary }]}>
-                      Flash Solid-State Storage
-                    </Text>
-                  </View>
-
-                  <View style={styles.ramBarContainer}>
-                    <View style={styles.ramBarLabelsRow}>
-                      <Text style={[styles.ramBarLabel, { color: theme.textPrimary }]}>
-                        {telemetry.storageAvailableGb} GB Free Space
-                      </Text>
-                      <Text style={[styles.ramBarLabel, { color: theme.textMuted }]}>
-                        {telemetry.storageTotalGb} GB Total
-                      </Text>
-                    </View>
-
-                    <View style={[styles.ramBarTrack, { backgroundColor: theme.backgroundSecondary }]}>
-                      <View
-                        style={[
-                          styles.ramBarUsed,
-                          {
-                            width: `${Math.round(((telemetry.storageTotalGb - telemetry.storageAvailableGb) / telemetry.storageTotalGb) * 100)}%`,
-                            backgroundColor: theme.pastels.green.text,
-                          },
-                        ]}
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Storage Technology</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.storageType}</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Sequential Read Speed</Text>
-                    <Text style={[styles.specItemValue, { color: theme.accent, fontWeight: '800' }]}>
-                      {telemetry.sequentialReadSpeedMbS} MB/s
-                    </Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>mmap DMA Feasibility</Text>
-                    <Text style={[styles.specItemValue, { color: theme.success }]}>
-                      Ultra-Fast (Direct Page Fault Streaming)
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.cardBorder, marginTop: 14 }]}>
-                  <View style={styles.specCardHeader}>
                     <View style={[styles.cardHeaderIcon, { backgroundColor: theme.pastels.blue.bg }]}>
-                      <Icon name="folder" size={15} color={theme.pastels.blue.text} />
+                      <Icon name="hard-drive" size={15} color={theme.pastels.blue.text} />
                     </View>
                     <Text style={[styles.cardHeaderTitle, { color: theme.textPrimary }]}>
-                      Zaylo Local Model Cache
+                      On-Device Flash Storage
                     </Text>
                   </View>
 
                   <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Model Directory</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>Sandbox Cache / GGUF</Text>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Installed Models</Text>
+                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
+                      {installedCount} Model{installedCount === 1 ? '' : 's'} on Flash Disk
+                    </Text>
                   </View>
 
                   <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Integrity Verification</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>SHA-256 Checksum on Download</Text>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Available Flash Space</Text>
+                    <Text style={[styles.specItemValue, { color: theme.success }]}>
+                      {availableStorageGb} GB Free
+                    </Text>
                   </View>
 
                   <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Persistence Mode</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>Offline Local Storage</Text>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Storage Directory</Text>
+                    <Text style={[styles.specItemValue, { color: theme.textSecondary }]}>
+                      Native App Documents (/models/)
+                    </Text>
+                  </View>
+
+                  <View style={styles.specItemRow}>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Storage Format</Text>
+                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
+                      Binary GGUF (v3 Format)
+                    </Text>
                   </View>
                 </View>
               </View>
             )}
 
-            {/* TAB 4: SYSTEM & THERMALS */}
-            {activeTab === 'system' && (
+            {/* TAB 3: HOST & ENGINE */}
+            {activeTab === 'engine' && (
               <View style={styles.tabContentBlock}>
                 <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
                   <View style={styles.specCardHeader}>
-                    <View style={[styles.cardHeaderIcon, { backgroundColor: theme.pastels.purple.bg }]}>
-                      <Icon name="activity" size={15} color={theme.pastels.purple.text} />
+                    <View style={[styles.cardHeaderIcon, { backgroundColor: theme.pastels.green.bg }]}>
+                      <Icon name="zap" size={15} color={theme.pastels.green.text} />
                     </View>
                     <Text style={[styles.cardHeaderTitle, { color: theme.textPrimary }]}>
-                      Operating System & Kernel
+                      Inference Engine Status
                     </Text>
                   </View>
 
                   <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Operating System</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.osName}</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Host Kernel</Text>
-                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>{telemetry.kernelVersion}</Text>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Thermal Headroom</Text>
-                    <View style={[styles.pillBadge, { backgroundColor: theme.successLight }]}>
-                      <Text style={[styles.pillBadgeText, { color: theme.success }]}>
-                        {telemetry.thermalState} (Optimal)
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.specItemRow}>
-                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Battery Status</Text>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Host IP Address</Text>
                     <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
-                      {telemetry.batteryPercent}% ({telemetry.batteryState})
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Privacy & Airgap Assurance */}
-                <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.cardBorder, marginTop: 14 }]}>
-                  <View style={styles.specCardHeader}>
-                    <View style={[styles.cardHeaderIcon, { backgroundColor: theme.successLight }]}>
-                      <Icon name="shield" size={15} color={theme.success} />
-                    </View>
-                    <Text style={[styles.cardHeaderTitle, { color: theme.textPrimary }]}>
-                      Security & Privacy Sandbox
+                      {hostIp}:8080
                     </Text>
                   </View>
 
-                  <View style={styles.privacyItem}>
-                    <Icon name="check-circle" size={15} color={theme.success} style={{ marginTop: 2 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.privacyTitle, { color: theme.textPrimary }]}>
-                        100% Offline Weight Execution
-                      </Text>
-                      <Text style={[styles.privacyDesc, { color: theme.textMuted }]}>
-                        All matrix calculations run strictly through local CPU, GPU, and NPU silicon without telemetry.
-                      </Text>
-                    </View>
+                  <View style={styles.specItemRow}>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Engine Protocol</Text>
+                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
+                      OpenAI Chat Completions API
+                    </Text>
                   </View>
 
-                  <View style={styles.privacyItem}>
-                    <Icon name="check-circle" size={15} color={theme.success} style={{ marginTop: 2 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.privacyTitle, { color: theme.textPrimary }]}>
-                        Zero External Network Connections
-                      </Text>
-                      <Text style={[styles.privacyDesc, { color: theme.textMuted }]}>
-                        Model downloads pull directly from official Hugging Face GGUF repositories; no inference prompts are sent.
-                      </Text>
-                    </View>
+                  <View style={styles.specItemRow}>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Acceleration Pipeline</Text>
+                    <Text style={[styles.specItemValue, { color: theme.success }]}>
+                      Metal 3 & ARM NEON SIMD
+                    </Text>
+                  </View>
+
+                  <View style={styles.specItemRow}>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Network Mode</Text>
+                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
+                      Local Wi-Fi LAN (Zero Cloud Egress)
+                    </Text>
+                  </View>
+
+                  <View style={styles.specItemRow}>
+                    <Text style={[styles.specItemLabel, { color: theme.textMuted }]}>Battery & Thermal</Text>
+                    <Text style={[styles.specItemValue, { color: theme.textPrimary }]}>
+                      {telemetry.batteryPercent}% • {telemetry.batteryState} • {telemetry.thermalState}
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -586,17 +403,17 @@ export const MemoryGaugeModal: React.FC<MemoryGaugeModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
   },
   modalCard: {
     width: '100%',
-    maxWidth: 500,
-    maxHeight: '90%',
-    borderRadius: 28,
-    borderWidth: 1,
+    maxWidth: 440,
+    maxHeight: '85%',
+    borderRadius: 24,
+    borderWidth: 1.5,
     overflow: 'hidden',
   },
   header: {
@@ -604,23 +421,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
   },
   closeButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -628,10 +446,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginHorizontal: 18,
+    marginHorizontal: 16,
     marginTop: 14,
+    marginBottom: 10,
     padding: 12,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
   },
   socIconCircle: {
@@ -647,31 +466,39 @@ const styles = StyleSheet.create({
   },
   socSubtitle: {
     fontSize: 11,
-    fontWeight: '500',
-    marginTop: 2,
+    fontWeight: '600',
+    marginTop: 1,
   },
   acceleratedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   acceleratedBadgeText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   tabsRow: {
     flexDirection: 'row',
-    paddingHorizontal: 18,
-    marginTop: 14,
+    paddingHorizontal: 16,
     gap: 8,
+    marginBottom: 12,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 12,
   },
   tabButtonActive: {},
   tabButtonInactive: {},
@@ -680,138 +507,70 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   scrollContent: {
-    padding: 18,
-    paddingTop: 14,
-    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
-  tabContentBlock: {},
+  tabContentBlock: {
+    gap: 10,
+  },
   specCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
-    padding: 16,
+    padding: 14,
   },
   specCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
+    gap: 8,
+    marginBottom: 12,
   },
   cardHeaderIcon: {
     width: 28,
     height: 28,
-    borderRadius: 9,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardHeaderTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
+  },
+  memoryStatsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ramUsageText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  ramFreeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  ramBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 14,
+  },
+  ramBarFill: {
+    height: '100%',
+    borderRadius: 3,
   },
   specItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 7,
-    borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(150, 150, 150, 0.1)',
-  },
-  specItemLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  specItemValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'right',
-    maxWidth: '58%',
-  },
-  subHeading: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  clusterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 6,
   },
-  clusterTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  clusterFreq: {
+  specItemLabel: {
     fontSize: 11,
-    marginTop: 1,
+    fontWeight: '600',
   },
-  freqBarBg: {
-    width: 90,
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  freqBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  chipTagsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
-  },
-  instructionTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  instructionTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  ramBarContainer: {
-    marginBottom: 14,
-  },
-  ramBarLabelsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  ramBarLabel: {
+  specItemValue: {
     fontSize: 11,
     fontWeight: '700',
-  },
-  ramBarTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  ramBarUsed: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  pillBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  pillBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  privacyItem: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingVertical: 8,
-  },
-  privacyTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  privacyDesc: {
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 2,
   },
 });

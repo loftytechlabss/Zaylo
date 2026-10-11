@@ -1,3 +1,4 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import type { 
   ChatMessage, 
   MessageMetrics, 
@@ -5,36 +6,129 @@ import type {
   MemoryPagingConfig 
 } from '../types';
 
+let nativeInitLlama: any = null;
+try {
+  const llamaPkg = require('llama.rn');
+  nativeInitLlama = llamaPkg.initLlama || llamaPkg.default?.initLlama;
+} catch {}
+
 export class OnDeviceEngine {
   private static isInitialized = false;
-  private static activeModelId: string | null = null;
+  private static activeModel: OnDeviceModel | null = null;
   private static activeConfig: MemoryPagingConfig | null = null;
+  private static loadedRamMb: number = 0;
+  private static nativeContext: any = null;
+
+  public static isNativeSupported(): boolean {
+    return typeof nativeInitLlama === 'function';
+  }
 
   public static async loadModel(
     model: OnDeviceModel,
     config: MemoryPagingConfig
-  ): Promise<{ success: boolean; loadedRamMb: number }> {
-    this.activeModelId = model.id;
-    this.activeConfig = config;
-    this.isInitialized = true;
+  ): Promise<{ success: boolean; loadedRamMb: number; message: string }> {
+    // 1. Verify model weights on device storage
+    let weightsFoundOnDisk = false;
+    let actualSizeBytes = 0;
+    let localModelPath: string | null = null;
 
-    return {
-      success: true,
-      loadedRamMb: config.estimatedFootprintMb,
-    };
+    try {
+      if (FileSystem.documentDirectory) {
+        const filePath = `${FileSystem.documentDirectory}models/${model.id}.gguf`;
+        const fileInfo = await FileSystem.getInfoAsync(filePath);
+        if (fileInfo.exists && typeof fileInfo.size === 'number' && fileInfo.size > 10 * 1024 * 1024) {
+          weightsFoundOnDisk = true;
+          actualSizeBytes = fileInfo.size;
+          localModelPath = filePath.replace(/^file:\/\//, '');
+        }
+      }
+    } catch {}
+
+    if (!weightsFoundOnDisk || !localModelPath) {
+      return {
+        success: false,
+        loadedRamMb: 0,
+        message: `Model weights for "${model.name}" are not downloaded on device yet. Please download the model from the Models tab first.`,
+      };
+    }
+
+    // 2. Verify native C++/GPU runtime support (standalone iOS/Android build)
+    if (!this.isNativeSupported()) {
+      return {
+        success: false,
+        loadedRamMb: 0,
+        message: 'Native C++ / GPU runtime is not available inside the Expo Go sandbox. Run a standalone development build (npx expo run:ios or npx expo run:android) to load GGUF models directly on device hardware.',
+      };
+    }
+
+    // 3. Initialize Native C++ / Apple Metal / OpenCL Context
+    try {
+      if (this.nativeContext) {
+        await this.nativeContext.release().catch(() => {});
+        this.nativeContext = null;
+      }
+
+      this.nativeContext = await nativeInitLlama({
+        model: localModelPath,
+        n_ctx: config.contextWindow || 2048,
+        n_gpu_layers: 99, // Apple Metal GPU on iOS / OpenCL on Android
+        use_mmap: config.useMmap ?? true,
+        flash_attn_type: 'auto',
+        cache_type_k: config.kvCacheQuant || 'q8_0',
+        cache_type_v: config.kvCacheQuant || 'q8_0',
+      });
+
+      this.activeModel = model;
+      this.activeConfig = config;
+      this.isInitialized = true;
+      this.loadedRamMb = config.estimatedFootprintMb || Math.round(model.sizeMb * 1.3);
+
+      return {
+        success: true,
+        loadedRamMb: this.loadedRamMb,
+        message: `Loaded ${model.name} (${(actualSizeBytes / (1024 * 1024)).toFixed(1)} MB) into native GPU memory via Apple Metal / OpenCL.`,
+      };
+    } catch (err: any) {
+      this.isInitialized = false;
+      this.activeModel = null;
+      this.nativeContext = null;
+      this.loadedRamMb = 0;
+      return {
+        success: false,
+        loadedRamMb: 0,
+        message: `Failed to initialize native model: ${err?.message || String(err)}`,
+      };
+    }
   }
 
   public static async unloadModel(): Promise<void> {
-    if (this.isInitialized) {
-      this.isInitialized = false;
-      this.activeModelId = null;
-      this.activeConfig = null;
+    if (this.nativeContext) {
+      try {
+        await this.nativeContext.release();
+      } catch {}
+      this.nativeContext = null;
     }
+    this.isInitialized = false;
+    this.activeModel = null;
+    this.activeConfig = null;
+    this.loadedRamMb = 0;
+  }
+
+  public static isModelLoaded(): boolean {
+    return this.isInitialized && this.nativeContext !== null && this.activeModel !== null;
+  }
+
+  public static getActiveModel(): OnDeviceModel | null {
+    return this.activeModel;
+  }
+
+  public static getLoadedRamMb(): number {
+    return this.loadedRamMb;
   }
 
   /**
    * Generates a streaming response for the prompt.
-   * Attempts local endpoint streaming first, with intelligent on-device generation fallback.
+   * 100% Native on-device execution on the phone's Apple Metal / OpenCL GPU via llama.rn.
    */
   public static async generateCompletion(
     messages: ChatMessage[],
@@ -44,207 +138,96 @@ export class OnDeviceEngine {
   ): Promise<() => void> {
     let isCancelled = false;
     const startTime = Date.now();
-    const controller = new AbortController();
 
-    const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
-    const query = lastUserMessage.trim().toLowerCase();
-
-    // 1. First attempt: check if local Fastify Gateway or llama.cpp server is available on port 8080
     (async () => {
-      let streamedFromLocalHost = false;
-      try {
-        const localEndpoints = ['http://localhost:8080', 'http://127.0.0.1:8080'];
-        for (const ep of localEndpoints) {
-          try {
-            const timeoutSignal = AbortSignal.timeout(1200);
-            const res = await fetch(`${ep}/v1/chat/completions`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-              body: JSON.stringify({
-                model: this.activeModelId || 'default',
-                messages: messages.map((m) => ({ role: m.role, content: m.content })),
-                stream: true,
-                temperature: 0.7,
-              }),
-              signal: timeoutSignal,
-            });
+      // 1. Check if model is loaded into native hardware
+      if (!this.nativeContext) {
+        const errorMsg = !this.isNativeSupported()
+          ? 'Native C++ / Metal / OpenCL engine is not available in the Expo Go sandbox.\n\nPlease run this standalone development build (`npx expo run:ios` or `npx expo run:android`) to execute GGUF models directly on device hardware.'
+          : 'No GGUF model is loaded into device memory.\n\nPlease go to the Models tab, download a model (e.g. SmolLM2 135M or Qwen 2.5 0.5B), and tap "Load into RAM".';
 
-            if (res.ok && res.body) {
-              const reader = res.body.getReader();
-              const decoder = new TextDecoder('utf-8');
-              let buffer = '';
-              let totalTokens = 0;
-              let firstTokenTime = 0;
-
-              while (true) {
-                if (isCancelled) break;
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                  const trimmed = line.trim();
-                  if (!trimmed || trimmed.startsWith(':')) continue;
-                  if (trimmed === 'data: [DONE]') continue;
-                  if (trimmed.startsWith('data: ')) {
-                    try {
-                      const parsed = JSON.parse(trimmed.slice(6));
-                      const delta = parsed.choices?.[0]?.delta?.content;
-                      if (delta) {
-                        if (firstTokenTime === 0) firstTokenTime = Date.now();
-                        totalTokens++;
-                        onToken(delta);
-                      }
-                    } catch {}
-                  }
-                }
-              }
-
-              if (totalTokens > 0) {
-                streamedFromLocalHost = true;
-                const endTime = Date.now();
-                const durationSec = Math.max(0.1, (endTime - (firstTokenTime || startTime)) / 1000);
-                onComplete({
-                  ttftMs: firstTokenTime ? firstTokenTime - startTime : 120,
-                  tokensPerSec: Number((totalTokens / durationSec).toFixed(1)),
-                  totalTokens,
-                  generationDurationMs: endTime - startTime,
-                  backendUsed: 'on_device_paged',
-                });
-                return;
-              }
-            }
-          } catch {}
-        }
-      } catch {}
-
-      if (streamedFromLocalHost || isCancelled) return;
-
-      // 2. Fallback: Intelligent on-device knowledge engine tailored directly to query
-      let responseText = '';
-
-      if (query.includes('lru') || query.includes('cache')) {
-        responseText = `Here is a high-performance TypeScript implementation of an LRU (Least Recently Used) cache:\n\n` +
-          `\`\`\`typescript\n` +
-          `class LRUCache<K, V> {\n` +
-          `  private capacity: number;\n` +
-          `  private cache: Map<K, V> = new Map();\n\n` +
-          `  constructor(capacity: number) {\n` +
-          `    this.capacity = capacity;\n` +
-          `  }\n\n` +
-          `  get(key: K): V | undefined {\n` +
-          `    if (!this.cache.has(key)) return undefined;\n` +
-          `    const value = this.cache.get(key)!;\n` +
-          `    this.cache.delete(key);\n` +
-          `    this.cache.set(key, value);\n` +
-          `    return value;\n` +
-          `  }\n\n` +
-          `  put(key: K, value: V): void {\n` +
-          `    if (this.cache.has(key)) {\n` +
-          `      this.cache.delete(key);\n` +
-          `    } else if (this.cache.size >= this.capacity) {\n` +
-          `      const oldestKey = this.cache.keys().next().value;\n` +
-          `      if (oldestKey !== undefined) this.cache.delete(oldestKey);\n` +
-          `    }\n` +
-          `    this.cache.set(key, value);\n` +
-          `  }\n` +
-          `}\n` +
-          `\`\`\`\n\n` +
-          `This structure provides $O(1)$ constant time lookup and $O(1)$ eviction leveraging JavaScript's ordered Map keys.`;
-      } else if (query.includes('quantum') || query.includes('qubit')) {
-        responseText = `Quantum computing leverages quantum mechanical phenomena—superposition and entanglement—to perform computations fundamentally beyond classical Turing machines:\n\n` +
-          `1. **Qubits & Superposition**: Unlike a classical binary bit (strictly 0 or 1), a qubit exists in a linear superposition state $|\psi\\rangle = \\alpha|0\\rangle + \\beta|1\\rangle$, where $|\\alpha|^2 + |\\beta|^2 = 1$.\n` +
-          `2. **Quantum Entanglement**: Entangled qubit pairs share correlated states such that observing one instantly determines the state of the other, enabling exponentially large state spaces ($2^n$ dimensions for $n$ qubits).\n` +
-          `3. **Key Algorithms**:\n` +
-          `   • **Shor's Algorithm**: Polynomial-time integer factorization ($O((\\log N)^3)$), breaking RSA cryptography.\n` +
-          `   • **Grover's Algorithm**: Quadratic speedup ($O(\\sqrt{N})$) for unstructured database search.\n` +
-          `4. **Hardware Implementations**: Superconducting circuits (transmons), trapped ions, and topological qubits operating in dilution refrigerators at millikelvin temperatures.`;
-      } else if (query.includes('fastify') || query.includes('route') || query.includes('api')) {
-        responseText = `Here is a production-ready Fastify API route with JSON schema validation and structured error handling:\n\n` +
-          `\`\`\`typescript\n` +
-          `import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';\n\n` +
-          `interface PredictBody {\n` +
-          `  prompt: string;\n` +
-          `  temperature?: number;\n` +
-          `}\n\n` +
-          `export async function registerInferenceRoutes(app: FastifyInstance) {\n` +
-          `  app.post<{ Body: PredictBody }>('/v1/predict', {\n` +
-          `    schema: {\n` +
-          `      body: {\n` +
-          `        type: 'object',\n` +
-          `        required: ['prompt'],\n` +
-          `        properties: {\n` +
-          `          prompt: { type: 'string', minLength: 1 },\n` +
-          `          temperature: { type: 'number', minimum: 0, maximum: 2, default: 0.7 },\n` +
-          `        },\n` +
-          `      },\n` +
-          `    },\n` +
-          `  }, async (request: FastifyRequest<{ Body: PredictBody }>, reply: FastifyReply) => {\n` +
-          `    const { prompt, temperature } = request.body;\n` +
-          `    return reply.status(200).send({\n` +
-          `      status: 'ok',\n` +
-          `      model: 'on-device-paged',\n` +
-          `      result: 'Processed prompt successfully',\n` +
-          `      tokens: prompt.split(' ').length,\n` +
-          `    });\n` +
-          `  });\n` +
-          `}\n` +
-          `\`\`\``;
-      } else if (query.includes('hello') || query.includes('hi') || query.includes('hey')) {
-        responseText = `Hello! I'm Zaylo, your private on-device intelligence engine. All inference operations execute completely offline on your physical hardware without external cloud APIs. What would you like to explore today?`;
-      } else if (query.includes('react') || query.includes('component')) {
-        responseText = `In modern React Native architecture, state management and render performance rely on fine-grained reactivity and memoization:\n\n` +
-          `• **useMemo & useCallback**: Prevent unnecessary re-instantiation of complex computations and handlers across re-renders.\n` +
-          `• **FlatList & Virtualization**: Only mount items currently in the viewport to maintain 60–120 FPS scroll fluidness.\n` +
-          `• **Native Drivers**: Always specify \`useNativeDriver: true\` for transforms and opacity animations to bypass the JavaScript thread and execute directly on the UI thread.`;
-      } else {
-        responseText = `Regarding "${lastUserMessage}":\n\n` +
-          `Here is a structured technical response:\n\n` +
-          `1. **Direct Assessment**: The subject involves optimizing resource allocation while keeping execution latency minimal.\n` +
-          `2. **Key Architectural Principles**:\n` +
-          `   • Strict state isolation and separation of concerns\n` +
-          `   • Memory bounds enforcement with kernel virtual paging\n` +
-          `   • Zero external dependencies or unvetted network calls\n` +
-          `3. **Implementation Strategy**: Ensure operations run asynchronously to preserve main thread fluidity, avoiding CPU contention with background model weights streaming.`;
+        onToken(errorMsg);
+        onComplete({
+          ttftMs: 0,
+          tokensPerSec: 0,
+          totalTokens: 0,
+          generationDurationMs: 0,
+          backendUsed: 'on_device_paged',
+        });
+        return;
       }
 
-      const words = responseText.split(' ');
-      const delayPerToken = 22;
-
-      await new Promise((r) => setTimeout(r, 60));
-      if (isCancelled) return;
-
-      const firstTokenTime = Date.now();
+      // 2. Direct Native On-Device Inference on Phone's Hardware
+      let firstTokenTime = 0;
       let totalTokens = 0;
 
-      for (const word of words) {
-        if (isCancelled) break;
-        await new Promise((r) => setTimeout(r, delayPerToken));
-        if (isCancelled) break;
+      try {
+        const stopWords = [
+          '</s>',
+          '<|end|>',
+          '<|eot_id|>',
+          '<|end_of_text|>',
+          '<|im_end|>',
+          '<|EOT|>',
+          '<|END_OF_TURN_TOKEN|>',
+          '<|end_of_turn|>',
+          '<|endoftext|>',
+        ];
 
-        onToken(word + ' ');
-        totalTokens++;
+        const formattedMessages = messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+
+        const result = await this.nativeContext.completion(
+          {
+            messages: formattedMessages,
+            n_predict: 256,
+            stop: stopWords,
+            temperature: 0.7,
+          },
+          (data: { token?: string }) => {
+            if (isCancelled || !data?.token) return;
+            if (firstTokenTime === 0) firstTokenTime = Date.now();
+            totalTokens++;
+            onToken(data.token);
+          }
+        );
+
+        if (!isCancelled) {
+          const endTime = Date.now();
+          const durationSec = Math.max(0.1, (endTime - (firstTokenTime || startTime)) / 1000);
+          const tokensPerSec = result?.timings?.predicted_per_second
+            ? Number(result.timings.predicted_per_second.toFixed(1))
+            : Number((totalTokens / durationSec).toFixed(1));
+
+          onComplete({
+            ttftMs: firstTokenTime ? firstTokenTime - startTime : 45,
+            tokensPerSec,
+            totalTokens: result?.timings?.predicted_n || totalTokens,
+            generationDurationMs: endTime - startTime,
+            backendUsed: 'on_device_paged',
+          });
+        }
+      } catch (err: any) {
+        if (!isCancelled) {
+          onToken(`\n\n[Inference Error: ${err?.message || String(err)}]`);
+          onComplete({
+            ttftMs: 0,
+            tokensPerSec: 0,
+            totalTokens,
+            generationDurationMs: Date.now() - startTime,
+            backendUsed: 'on_device_paged',
+          });
+        }
       }
-
-      const endTime = Date.now();
-      const durationSec = Math.max(0.1, (endTime - firstTokenTime) / 1000);
-      const tokensPerSec = Number((totalTokens / durationSec).toFixed(1));
-
-      onComplete({
-        ttftMs: firstTokenTime - startTime,
-        tokensPerSec,
-        totalTokens,
-        generationDurationMs: endTime - startTime,
-        backendUsed: 'on_device_paged',
-      });
     })();
 
     return () => {
       isCancelled = true;
-      controller.abort();
+      try {
+        this.nativeContext?.stopCompletion?.();
+      } catch {}
     };
   }
 }

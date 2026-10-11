@@ -146,17 +146,32 @@ export class DeviceProfiler {
    * battery state, and flash quota).
    */
   public static getHardwareTelemetry(): DeviceHardwareTelemetry {
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-    const platformStr = typeof navigator !== 'undefined' ? (navigator.platform || '') : '';
-    const hwConcurrency = typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
+    const isNativeIOS = Platform.OS === 'ios';
+    const isNativeAndroid = Platform.OS === 'android';
+    const ua = (typeof navigator !== 'undefined' && typeof navigator.userAgent === 'string') ? navigator.userAgent : '';
+    const platformStr = (typeof navigator !== 'undefined' && typeof (navigator as any).platform === 'string') ? (navigator as any).platform : '';
+    const hwConcurrency = (typeof navigator !== 'undefined' && typeof navigator.hardwareConcurrency === 'number') ? navigator.hardwareConcurrency : (isNativeIOS ? 6 : 8);
     const { renderer: gpuRenderer, vendor: gpuVendor } = this.getUnmaskedGpu();
+    const lowerGpu = (gpuRenderer || '').toLowerCase();
 
     // 1. Detect Real OS & Kernel
-    let osName = 'Unknown Operating System';
+    let osName = 'Mobile Device Operating System';
     let kernelVersion = 'Host Microkernel';
-    let cpuArchitecture = 'ARM64 / x86_64 Hybrid';
+    let cpuArchitecture = 'ARM64 Mobile Architecture';
 
-    if (ua.includes('Macintosh') || platformStr.includes('Mac')) {
+    if (isNativeIOS || ua.includes('iPhone') || ua.includes('iPad')) {
+      const match = ua.match(/OS ([0-9_]+)/);
+      const versionStr = match ? match[1].replace(/_/g, '.') : '18.x';
+      osName = `Apple iOS ${versionStr}`;
+      kernelVersion = 'Darwin Kernel (iOS XNU Core)';
+      cpuArchitecture = 'ARM64-v9.2-A (Apple Silicon Mobile)';
+    } else if (isNativeAndroid || ua.includes('Android')) {
+      const match = ua.match(/Android ([0-9.]+)/);
+      const versionStr = match ? match[1] : '15.x';
+      osName = `Android OS ${versionStr}`;
+      kernelVersion = 'Linux Kernel (Android Runtime)';
+      cpuArchitecture = 'ARM64-v8.2-A / v9 (Kryo / Cortex)';
+    } else if (ua.includes('Macintosh') || platformStr.includes('Mac')) {
       const match = ua.match(/Mac OS X ([0-9_]+)/);
       const versionStr = match ? match[1].replace(/_/g, '.') : 'Current';
       osName = `macOS (Apple Mac OS X ${versionStr})`;
@@ -164,18 +179,6 @@ export class DeviceProfiler {
       cpuArchitecture = ua.includes('Intel') || platformStr.includes('Intel')
         ? 'x86_64 (Intel 64-bit Core)'
         : 'ARM64-v9 (Apple Silicon Unified)';
-    } else if (ua.includes('iPhone')) {
-      const match = ua.match(/OS ([0-9_]+)/);
-      const versionStr = match ? match[1].replace(/_/g, '.') : 'Current';
-      osName = `Apple iOS ${versionStr}`;
-      kernelVersion = 'Darwin Kernel (iOS XNU)';
-      cpuArchitecture = 'ARM64-v9.2-A (Apple Silicon Mobile)';
-    } else if (ua.includes('Android')) {
-      const match = ua.match(/Android ([0-9.]+)/);
-      const versionStr = match ? match[1] : 'Current';
-      osName = `Android OS ${versionStr}`;
-      kernelVersion = 'Linux Kernel (Android Runtime)';
-      cpuArchitecture = 'ARM64-v8.2-A / v9 (Kryo / Cortex)';
     } else if (ua.includes('Windows')) {
       osName = 'Microsoft Windows';
       kernelVersion = 'Windows NT Kernel';
@@ -187,26 +190,25 @@ export class DeviceProfiler {
     }
 
     // 2. Identify the Actual SoC / Processor Name based on real hardware probes
-    let socName = `${hwConcurrency}-Core Host Hardware Processor`;
-    const lowerGpu = gpuRenderer.toLowerCase();
+    let socName = isNativeIOS ? 'Apple Bionic / Pro Mobile SoC' : isNativeAndroid ? 'Snapdragon / Dimensity Mobile SoC' : `${hwConcurrency}-Core Host Processor`;
 
     if (lowerGpu.includes('apple m')) {
       const match = gpuRenderer.match(/Apple M\d(\s+(Pro|Max|Ultra))?/i);
       socName = match ? match[0] : 'Apple Silicon M-Series';
-    } else if (lowerGpu.includes('apple') && (ua.includes('iPhone') || ua.includes('iPad'))) {
+    } else if (lowerGpu.includes('apple') || isNativeIOS || ua.includes('iPhone') || ua.includes('iPad')) {
       socName = 'Apple Bionic / Pro Mobile SoC';
+    } else if (lowerGpu.includes('adreno')) {
+      socName = `Qualcomm Snapdragon (${gpuRenderer})`;
+    } else if (lowerGpu.includes('mali')) {
+      socName = `MediaTek / Google Tensor (${gpuRenderer})`;
     } else if (lowerGpu.includes('intel')) {
       socName = `Intel Core Processor (${hwConcurrency} Threads • ${gpuRenderer.split('(')[0].trim() || 'Intel UHD Graphics'})`;
     } else if (lowerGpu.includes('amd') || lowerGpu.includes('radeon')) {
       socName = `AMD Processor (${hwConcurrency} Threads • ${gpuRenderer})`;
     } else if (lowerGpu.includes('nvidia') || lowerGpu.includes('geforce')) {
       socName = `Host CPU (${hwConcurrency} Threads • ${gpuRenderer})`;
-    } else if (lowerGpu.includes('adreno')) {
-      socName = `Qualcomm Snapdragon (${gpuRenderer})`;
-    } else if (lowerGpu.includes('mali')) {
-      socName = `MediaTek / Google Tensor (${gpuRenderer})`;
     } else if (gpuRenderer && gpuRenderer !== 'Hardware Accelerated GPU') {
-      socName = `${hwConcurrency}-Core Host Processor (${gpuRenderer})`;
+      socName = `${hwConcurrency}-Core Processor (${gpuRenderer})`;
     }
 
     // 3. Divide hardware threads into clusters
@@ -241,16 +243,18 @@ export class DeviceProfiler {
         ];
 
     // 5. Memory
-    const devMem = typeof navigator !== 'undefined' && (navigator as any).deviceMemory ? (navigator as any).deviceMemory : 8;
+    const devMem = (typeof navigator !== 'undefined' && typeof (navigator as any).deviceMemory === 'number')
+      ? (navigator as any).deviceMemory
+      : (isNativeIOS ? 8 : 6);
     const totalRamMb = devMem * 1024;
     const usedRamMb = Math.round(totalRamMb * 0.35);
     const availableRamMb = totalRamMb - usedRamMb;
 
     // 6. Compute API
     let gpuComputeApi = 'WebGL 2.0 & WebGPU Compute Pipeline';
-    if (ua.includes('Mac') || ua.includes('iPhone')) {
+    if (isNativeIOS || ua.includes('Mac') || ua.includes('iPhone')) {
       gpuComputeApi = 'Apple Metal 3 & MPS Graph (Metal Performance Shaders)';
-    } else if (ua.includes('Android')) {
+    } else if (isNativeAndroid || ua.includes('Android')) {
       gpuComputeApi = 'Vulkan 1.3 / OpenCL 3.0 Mobile Compute';
     } else if (ua.includes('Windows')) {
       gpuComputeApi = 'DirectX 12 Compute / Vulkan 1.3';
@@ -261,7 +265,7 @@ export class DeviceProfiler {
     let npuStatus = 'Available via Hardware SIMD';
     let npuTopsInt8 = 18.0;
 
-    if (lowerGpu.includes('apple')) {
+    if (lowerGpu.includes('apple') || isNativeIOS) {
       npuName = 'Apple Neural Engine (Hardware Matrix Accelerator)';
       npuStatus = 'Hardware Accelerated via Metal & MPS';
       npuTopsInt8 = 35.0;
