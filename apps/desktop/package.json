@@ -3,9 +3,9 @@
   "version": "2.0.0",
   "description": "Zaylo High-Performance Local AI Server Desktop App",
   "author": "Lofty Tech Labs <contact@loftytechlabs.com>",
-  "homepage": "https://github.com/loftytechlabs/Zaylo",
+  "homepage": "https://github.com/akhileshg1124/Zaylo",
   "license": "MIT",
-  "repository": "https://github.com/loftytechlabs/Zaylo",
+  "repository": "https://github.com/akhileshg1124/Zaylo",
   "private": true,
   "type": "module",
   "main": "dist-electron/main/index.js",
@@ -24,7 +24,7 @@
     "executableName": "zaylo",
     "publish": {
       "provider": "github",
-      "owner": "loftytechlabs",
+      "owner": "akhileshg1124",
       "repo": "Zaylo"
     },
     "directories": {

@@ -8,8 +8,8 @@
 
 Run open-weights LLMs locally on macOS, Windows, and Linux with full data privacy, hardware acceleration, and drop-in OpenAI API compatibility.
 
-[![Release](https://img.shields.io/github/v/release/loftytechlabs/Zaylo?style=flat-square&color=2563eb)](https://github.com/loftytechlabs/Zaylo/releases)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-18181b.svg?style=flat-square)](https://github.com/loftytechlabs/Zaylo/releases)
+[![Release](https://img.shields.io/github/v/release/akhileshg1124/Zaylo?style=flat-square&color=2563eb)](https://github.com/akhileshg1124/Zaylo/releases)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-18181b.svg?style=flat-square)](https://github.com/akhileshg1124/Zaylo/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6.svg?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Fastify](https://img.shields.io/badge/Fastify-v5-000000.svg?style=flat-square&logo=fastify&logoColor=white)](https://fastify.dev)
@@ -29,12 +29,12 @@ Download pre-compiled release binaries for your operating system:
 
 | Operating System | Architecture | Format | Download Link |
 | :--- | :--- | :---: | :--- |
-| macOS | Apple Silicon (M1, M2, M3, M4) | .dmg | [Download Zaylo for Mac (Apple Silicon)](https://github.com/loftytechlabs/Zaylo/releases/latest/download/Zaylo-2.0.0-arm64.dmg) |
-| macOS | Intel Core (x86_64) | .dmg | [Download Zaylo for Mac (Intel)](https://github.com/loftytechlabs/Zaylo/releases/latest/download/Zaylo-2.0.0.dmg) |
-| Windows | 10 / 11 (64-bit Installer) | .exe | [Download Zaylo for Windows (Setup)](https://github.com/loftytechlabs/Zaylo/releases/latest/download/Zaylo.Setup.2.0.0.exe) |
-| Windows | 10 / 11 (64-bit Portable) | .exe | [Download Zaylo for Windows (Portable)](https://github.com/loftytechlabs/Zaylo/releases/latest/download/Zaylo.2.0.0.exe) |
-| Linux | Universal AppImage | .AppImage | [Download Zaylo for Linux (AppImage)](https://github.com/loftytechlabs/Zaylo/releases/latest/download/Zaylo-2.0.0.AppImage) |
-| Linux | Debian / Ubuntu | .deb | [Download Zaylo for Linux (.deb)](https://github.com/loftytechlabs/Zaylo/releases/latest/download/Zaylo-2.0.0.deb) |
+| macOS | Apple Silicon (M1, M2, M3, M4) | .dmg | [Download Zaylo for Mac (Apple Silicon)](https://github.com/akhileshg1124/Zaylo/releases/latest/download/Zaylo-2.0.0-arm64.dmg) |
+| macOS | Intel Core (x86_64) | .dmg | [Download Zaylo for Mac (Intel)](https://github.com/akhileshg1124/Zaylo/releases/latest/download/Zaylo-2.0.0.dmg) |
+| Windows | 10 / 11 (64-bit Installer) | .exe | [Download Zaylo for Windows (Setup)](https://github.com/akhileshg1124/Zaylo/releases/latest/download/Zaylo.Setup.2.0.0.exe) |
+| Windows | 10 / 11 (64-bit Portable) | .exe | [Download Zaylo for Windows (Portable)](https://github.com/akhileshg1124/Zaylo/releases/latest/download/Zaylo.2.0.0.exe) |
+| Linux | Universal AppImage | .AppImage | [Download Zaylo for Linux (AppImage)](https://github.com/akhileshg1124/Zaylo/releases/latest/download/Zaylo-2.0.0.AppImage) |
+| Linux | Debian / Ubuntu | .deb | [Download Zaylo for Linux (.deb)](https://github.com/akhileshg1124/Zaylo/releases/latest/download/Zaylo-2.0.0.deb) |
 
 ---
 
@@ -378,7 +378,7 @@ To build and run Zaylo from source:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/loftytechlabs/Zaylo.git
+git clone https://github.com/akhileshg1124/Zaylo.git
 cd Zaylo
 
 # 2. Install workspace dependencies
